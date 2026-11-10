@@ -43,7 +43,7 @@ Box box (const Rect& r) { return { double (r.left), double (r.top), double (r.ri
 
 int positionsOf (int tag)
 {
-	return tag == kTagEra ? kEraCount : 2;
+	return tag == kTagEra ? kEraCount : (tag == kTagSpeed ? kSpeedCount : 2);
 }
 std::string positionName (int tag, int i)
 {
@@ -55,6 +55,8 @@ std::string positionName (int tag, int i)
 	}
 	if (tag == kTagDisc)
 		return upperCase (discName (i));
+	if (tag == kTagSpeed)
+		return i == kSpeedAuto ? "AUTO" : speedName (i);
 	return i ? "ON" : "OFF";
 }
 
@@ -93,9 +95,10 @@ int main ()
 	}
 
 	std::printf ("controls\n");
-	CHECK (kNumControls == 10, "every setting has a control");
-	for (int tag = 0; tag < 10; ++tag)
+	CHECK (kNumControls == 11, "every setting has a control");
+	for (int tag : { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12 })
 		CHECK (controlFor (tag) != nullptr, "tag %d is on the panel", tag);
+	CHECK (controlFor (10) == nullptr && controlFor (11) == nullptr, "the outputs have no control");
 	for (int i = 0; i < kNumControls; ++i)
 	{
 		const Control& c = kControls[i];
@@ -171,8 +174,9 @@ int main ()
 	std::string headerLongest;
 	for (int e = 0; e < kEraCount; ++e)
 		for (int d = 0; d < kDiscCount; ++d)
+		for (int sp = 0; sp < kSpeedCount; ++sp)
 		{
-			const std::string h = headerLineText (e, d);
+			const std::string h = headerLineText (e, d, sp);
 			CHECK (allDrawable (h), "every character drawable: %s", h.c_str ());
 			if (Lettering::width (h, kTextHeader) > headerMax)
 				headerMax = Lettering::width (h, kTextHeader), headerLongest = h;
@@ -183,7 +187,7 @@ int main ()
 					CHECK (allDrawable (t), "drawable: %s", t.c_str ());
 					ttMax = std::fmax (ttMax, Lettering::width (t, kTextNote));
 				}
-			speedMax = std::fmax (speedMax, Lettering::width (speedLineText (e, d), kTextNote));
+			speedMax = std::fmax (speedMax, Lettering::width (speedLineText (e, d, sp), kTextNote));
 			noteMax = std::fmax (noteMax, Lettering::width (discNoteText (e), kTextNote));
 		}
 	std::printf ("  header %.0f of %d (%s)\n  turntable %.0f of %d, speed %.0f of %d, disc note %.0f of %d\n",
@@ -194,6 +198,14 @@ int main ()
 	CHECK (speedMax <= kSpeedLine.width (), "the speed line fits");
 	CHECK (noteMax <= kDiscNote.width (), "the disc note fits");
 	CHECK (Lettering::width (kSurfaceNoteText, kTextNote) <= kSurfaceNote.width (), "the surface note fits");
+	CHECK (rpmText (kEra1960, kDiscVinyl, kSpeedAuto) == "33 RPM" && rpmText (kEra1960, kDiscVinyl, kSpeed45) == "45 RPM" &&
+	       rpmText (kEra1920, kDiscVinyl, kSpeedAuto) == "78 RPM" && rpmText (kEra1920, kDiscVinyl, kSpeed33) == "33 RPM",
+	       "the rpm shown follows the switch, and Auto follows the disc");
+	{
+		// The DISC note sits under DISC, not under SPEED.
+		const Control* d = controlFor (kTagDisc);
+		CHECK (std::fabs ((kDiscNote.left + kDiscNote.right) / 2.0 - d->centreX) < 1.0, "the disc note centred under DISC");
+	}
 	CHECK (allDrawable (kSurfaceNoteText) && allDrawable ("OUTPUT SKIP STUCK MONO STEREO 78 RPM 33 RPM"), "fixed text drawable");
 	CHECK (inside (kSurfaceNote, kSections[2].r) && kSurfaceNote.top > controlFor (kTagScratches)->r.bottom,
 	       "the surface note under the knobs");

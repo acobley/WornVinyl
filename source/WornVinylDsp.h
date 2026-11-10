@@ -75,6 +75,33 @@ constexpr int effectiveDisc (int era, int disc)
 constexpr double rpmOf (int disc) { return disc == kDiscShellac ? 78.0 : 100.0 / 3.0; }
 constexpr double revolutionHz (int disc) { return rpmOf (disc) / 60.0; }
 
+//------------------------------------------------------------------------
+/** THE SPEED SWITCH: Auto plays the disc at its own speed (78 shellac,
+    33 1/3 vinyl); the others turn any disc at that speed - a 1960s 45
+    single, a shellac 78 put on at 33. It sets how often the disc's faults
+    come round (scratch ticks, wow, the warp, a stuck groove's length);
+    the music keeps its own pitch and tempo. */
+enum Speed
+{
+	kSpeedAuto,
+	kSpeed33,
+	kSpeed45,
+	kSpeed78,
+	kSpeedCount
+};
+constexpr int kSpeedDefault = kSpeedAuto;
+
+const char* speedName (int speed);     // "Auto", "33", "45", "78"
+
+/** The rpm the disc turns at, all three settings considered. */
+constexpr double turntableRpm (int era, int disc, int speed)
+{
+	return speed == kSpeed33 ? 100.0 / 3.0
+	     : speed == kSpeed45 ? 45.0
+	     : speed == kSpeed78 ? 78.0
+	     : rpmOf (effectiveDisc (era, disc));
+}
+
 /** A disc pressed in stereo - the 1960s and 1970s. Everything older is
     mono: summed, and its noise identical in both channels. */
 constexpr bool isStereo (int era) { return era >= kEra1960; }
@@ -229,6 +256,7 @@ public:
 	// ---- parameters, in PLAIN units ---------------------------------------
 	void setEra (int era);
 	void setDisc (int disc);
+	void setSpeed (int speed);
 	void setScratchesPct (double pct) { mScratches.target = clampPct (pct); }
 	void setDustPct (double pct)      { mDust.target = clampPct (pct); }
 	void setWowPct (double pct)       { mWow.target = clampPct (pct); }
@@ -254,6 +282,7 @@ public:
 
 	int era () const { return mEra; }
 	int playingDisc () const { return effectiveDisc (mEra, mDisc); }
+	double rpm () const { return turntableRpm (mActiveEra, mActiveDisc, mSpeed); }
 
 	// ---- for the tests -----------------------------------------------------
 	double sampleRate () const { return mFs; }
@@ -299,6 +328,7 @@ private:
 	double mFs = 44100.0;
 	int mEra = kEraDefault;
 	int mDisc = kDiscDefault;
+	int mSpeed = kSpeedDefault;
 
 	// the profile in use, and the one asked for (an era change fades out,
 	// swaps, fades in - a new EQ's state on the old signal would thump)

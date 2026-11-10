@@ -178,7 +178,7 @@ class Turntable : public VSTGUI::CView
 public:
 	explicit Turntable (const VSTGUI::CRect& size);
 
-	void setDisc (int era, int disc);
+	void setDisc (int era, int disc, int speed);
 	void setAngle (double discAngle);
 	void setAmounts (double scratchesPct, double dustPct, double warpPct);
 	void setSkipping (bool skipping);
@@ -187,7 +187,7 @@ public:
 	CLASS_METHODS (Turntable, VSTGUI::CView)
 
 private:
-	int mEra = kEraDefault, mDisc = kDiscDefault;
+	int mEra = kEraDefault, mDisc = kDiscDefault, mSpeed = kSpeedDefault;
 	double mAngle = 0.0;
 	double mScratches = 0.0, mDust = 0.0, mWarp = 0.0;
 	bool mSkipping = false;

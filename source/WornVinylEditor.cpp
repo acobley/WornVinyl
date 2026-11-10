@@ -120,6 +120,9 @@ void WornVinylEditor::build ()
 			std::string name = enumChoiceName (id, choice);
 			if (id == kEra && ! name.empty () && name.back () == 's')
 				name.pop_back ();
+			// Speed's numbers are rpm; Auto is the disc's own speed.
+			if (id == kSpeed && choice == kSpeedAuto)
+				name = "AUTO";
 			names.push_back (name);
 		}
 		sw->setNames (names);
@@ -184,18 +187,19 @@ void WornVinylEditor::refresh ()
 
 	const int era = choice (kEra);
 	const int disc = choice (kDisc);
+	const int speed = choice (kSpeed);
 
 	// The Disc switch: the era decides, except in the 1950s.
 	if (mDiscSwitch)
 		mDiscSwitch->setLocked (discLocked (era) ? effectiveDisc (era, disc) : -1);
 
-	mHeaderLine->setText (Layout::headerLineText (era, disc));
+	mHeaderLine->setText (Layout::headerLineText (era, disc, speed));
 	mDiscNote->setText (Layout::discNoteText (era));
 	mTurntableLine->setText (Layout::turntableLineText (era, disc, plain (kScratches), plain (kDust)));
-	mSpeedLine->setText (Layout::speedLineText (era, disc));
+	mSpeedLine->setText (Layout::speedLineText (era, disc, speed));
 
 	// The turntable: the published angle, the settings as they stand.
-	mTurntable->setDisc (era, disc);
+	mTurntable->setDisc (era, disc, speed);
 	mTurntable->setAngle (norm (kDiscAngle));
 	mTurntable->setAmounts (plain (kScratches), plain (kDust), plain (kWarp));
 

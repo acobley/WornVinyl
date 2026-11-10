@@ -49,6 +49,12 @@ const char* discName (int disc)
 	return disc == kDiscShellac ? "Shellac" : (disc == kDiscVinyl ? "Vinyl" : "");
 }
 
+const char* speedName (int speed)
+{
+	static const char* const names[kSpeedCount] = { "Auto", "33", "45", "78" };
+	return (speed >= 0 && speed < kSpeedCount) ? names[speed] : "";
+}
+
 const Profile& profileOf (int era, int disc)
 {
 	//                     hp     lp      peak 1             peak 2             width drive hiss  rumble crackle/s crackle scratch
@@ -240,7 +246,8 @@ void Dsp::setSampleRate (double fs)
 {
 	mFs = (fs > 1000.0) ? fs : 44100.0;
 
-	// The ring buffer: the deepest stick (kMaxStick turns of an LP) plus
+	// The ring buffer: the deepest stick (kMaxStick turns at 33 1/3, the
+	// slowest the Speed switch goes) plus
 	// the resting delay and its swing, rounded up to a power of two.
 	const double seconds = kMaxStick * 60.0 / rpmOf (kDiscVinyl) + 4.0 * kBaseDelaySeconds + 0.05;
 	uint32_t size = 1;
@@ -388,6 +395,13 @@ void Dsp::setDisc (int disc)
 		mProfilePending = true;
 }
 
+void Dsp::setSpeed (int speed)
+{
+	// No fade needed: the speed moves only the motor, and the motor's
+	// angle carries on from where it is.
+	mSpeed = std::clamp (speed, 0, kSpeedCount - 1);
+}
+
 void Dsp::setOutputDb (double db)
 {
 	mOutput.target = dbToGain (std::clamp (db, kOutputMinDb, kOutputMaxDb));
@@ -512,7 +526,7 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 		const int disc = effectiveDisc (mActiveEra, mActiveDisc);
 		const bool stereo = isStereo (era);
 		const Profile& prof = profileOf (era, disc);
-		const double fr = revolutionHz (disc);
+		const double fr = turntableRpm (era, mActiveDisc, mSpeed) / 60.0;
 
 		// ---- the motor ---------------------------------------------------------
 		const double prevTheta = mTheta;

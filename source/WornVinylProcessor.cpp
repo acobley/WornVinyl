@@ -158,6 +158,7 @@ void WornVinylProcessor::pushParameters ()
 	const double* p = mParams.data ();
 	mDsp.setEra (static_cast<int> (kParams[kEra].toInternal (p[kEra])));
 	mDsp.setDisc (static_cast<int> (kParams[kDisc].toInternal (p[kDisc])));
+	mDsp.setSpeed (static_cast<int> (kParams[kSpeed].toInternal (p[kSpeed])));
 	mDsp.setScratchesPct (plainValue (p, kScratches));
 	mDsp.setDustPct (plainValue (p, kDust));
 	mDsp.setWowPct (plainValue (p, kWow));
@@ -310,9 +311,11 @@ uint32 PLUGIN_API WornVinylProcessor::getTailSamples ()
 //     int32   version
 //     double  normalised value of each SETTING, ids 0 .. kNumStoredParams-1
 //     int32   bypass
+//     int32   speed index (kSpeed, appended 10 Nov 2026; absent = Auto)
 //
-// A setting appended later goes AFTER the bypass, read as "absent" (and so
-// its default) by a short stream.
+// A setting appended later goes AFTER these, read as "absent" (and so its
+// default) by a short stream - no version bump, so an older build still
+// opens a newer project (it reads what it knows and ignores the rest).
 //------------------------------------------------------------------------
 tresult PLUGIN_API WornVinylProcessor::setState (IBStream* state)
 {
@@ -345,6 +348,10 @@ tresult PLUGIN_API WornVinylProcessor::setState (IBStream* state)
 	int32 b = 0;
 	if (streamer.readInt32 (b))
 		bypass = (b != 0);
+
+	int32 speed = 0;
+	if (streamer.readInt32 (speed) && speed >= 0 && speed < kSpeedCount)
+		loaded[kSpeed] = kParams[kSpeed].toNormalized (speed);
 
 	// Handed to the audio thread, which applies it at the top of the next
 	// process() - the DSP is never touched from here. (Two loads faster
@@ -379,6 +386,7 @@ tresult PLUGIN_API WornVinylProcessor::getState (IBStream* state)
 	for (ParamID id = 0; id < kNumStoredParams; ++id)
 		streamer.writeDouble (source[id]);
 	streamer.writeInt32 ((mStatePending.load () ? mPendingBypass : mBypass) ? 1 : 0);
+	streamer.writeInt32 (static_cast<int32> (kParams[kSpeed].toInternal (source[kSpeed])));
 	return kResultOk;
 }
 

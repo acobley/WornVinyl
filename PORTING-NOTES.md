@@ -83,9 +83,12 @@ Every row carries normalised, plain and internal ranges; internal == plain
 | 9 | Output | −12…+12 dB, default 0 | |
 | 10 | Disc Angle | 0–1 | **output**, hidden: the turntable screen |
 | 11 | Skipping | 0/1 | **output**, hidden: the SKIP lamp (latched in the controller) |
+| 12 | Speed | Auto / 33 / 45 / 78, default Auto | **appended 10 Nov 2026**, a late setting (after the outputs). Auto = the disc's own speed (78 shellac, 33⅓ vinyl). Moves only the motor: scratch ticks, wow rate, warp, a stuck groove's length. The music keeps its pitch and tempo (tested) |
 | 1000 | Bypass | Off / On | through the DSP, so the latency holds |
 
-**State v1:** `int32 version`, ten `double` settings, `int32 bypass`. A short
+**State v1:** `int32 version`, ten `double` settings, `int32 bypass`, then
+`int32 speed` (appended without a version bump, so an older build still opens
+a newer project; a stream without it is Auto). A short
 stream resets what it omits to default; processor and controller read the
 same layout. `setState` (UI thread) parks the values and the audio thread
 takes them at the top of the next `process()` and snaps the smoothers — the
@@ -114,8 +117,10 @@ input → ring buffer ─(read: 12 ms + wow + drift + flutter + warp + jump offs
 | 1960s vinyl | 28 Hz – 15 kHz | 0.85 | |
 | 1970s vinyl | 20 Hz – 18.5 kHz | 1.0 | quietest surface |
 
-**Speeds:** shellac 78 rpm (a turn every 0.77 s), vinyl 33⅓ (1.8 s). The
-scratches, the wow and the warp all follow the turn.
+**Speeds:** on Auto, shellac 78 rpm (a turn every 0.77 s), vinyl 33⅓ (1.8 s);
+the Speed switch can turn any disc at 33⅓, 45 or 78 (`turntableRpm`). The
+scratches, the wow and the warp all follow the turn. Nothing turns slower
+than 33⅓, which is what the ring buffer is sized for (tested).
 
 **Jumps.** Only at the deepest scratch (slot 0), only above 60 % with Jumps
 on; the chance rises as ((s−60)/40)² / 6 a second (≈ one stick every 6 s at
@@ -150,7 +155,7 @@ MasterLoud in the entry file.
 
 1000 × 480. `WornVinylLayout.h` (VSTGUI-free, read by the tests) has every
 rectangle, the selector geometry (now 2, 3, 4 or **5** positions — Era's are
-at −90/−45/0/45/90°) and the readout formatters; `WornVinylPanelViews.*` has
+at −90/−45/0/45/90°, Speed's four at −90/−30/30/90°) and the readout formatters; `WornVinylPanelViews.*` has
 R2Synth's `Knob` and `RotarySwitch` (wear removed; the switch can be
 **locked**), plus `Turntable`, `Lamp`, `TextLine`, `Backdrop`.
 `SciFiLettering.h` is R2Synth's, namespace changed only. No bitmaps, no
@@ -165,12 +170,12 @@ needle is stuck. Era label colours are generic period colours, no company's.
 ## 8. Verification (VM, 10 Nov 2026)
 
 ```sh
-tools/run-tests.sh                       # DSP 89, Layout 332, Params 98 — 0 failed (cloud VM and the Mac's VM)
+tools/run-tests.sh                       # DSP 103, Layout 579, Params 115 — 0 failed (cloud VM and the Mac's VM, with Speed)
 SDK=external/vst3sdk   # (in the VM: a clean 3.8.1_build_84 clone)
 for f in source/*.cpp; do
   g++ -c -std=c++17 -DLINUX=1 -DRELEASE=1 -I$SDK -I$SDK/vstgui4 -Isource -o /tmp/$(basename $f .cpp).o $f
 done
-nm -C /tmp/*.o | grep " U " | grep "WornVinyl::"   # all 34 defined in the objects
+nm -C /tmp/*.o | grep " U " | grep "WornVinyl::"   # all 36 defined in the objects
 ```
 
 Measured: default patch with a −12 dBFS 1 kHz sine → output peak **−9.1 dBFS**

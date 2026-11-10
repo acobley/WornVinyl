@@ -55,6 +55,13 @@ enum Param : Steinberg::Vst::ParamID
 	kDiscAngle,     // 10  where the disc is, 0..1 of a turn - the turntable screen
 	kSkipping,      // 11  0 / 1, the needle is stuck or jumping - the SKIP lamp
 
+	//--------------------------------------------------------------------
+	// SETTINGS APPENDED AFTER THE OUTPUTS (ids never move), so outside
+	// kNumStoredParams: each is saved explicitly after the bypass - see
+	// isLateSetting and the state layout in WornVinylProcessor.cpp.
+	//--------------------------------------------------------------------
+	kSpeed,         // 12  Auto / 33 / 45 / 78 rpm - how fast the disc turns
+
 	kNumParams
 };
 
@@ -67,6 +74,13 @@ constexpr Steinberg::Vst::ParamID kOutputEnd  = kSkipping + 1;
 constexpr bool isOutputParam (Steinberg::Vst::ParamID id)
 {
 	return id >= kOutputBase && id < kOutputEnd;
+}
+
+/** The settings appended after the output block, saved one by one after
+    the bypass, in id order. */
+constexpr bool isLateSetting (Steinberg::Vst::ParamID id)
+{
+	return id == kSpeed;
 }
 
 /** The settings run from 0 to here and are saved; the outputs follow. */
@@ -150,6 +164,8 @@ inline const char* enumChoiceName (Steinberg::Vst::ParamID id, int choice)
 		return eraName (choice);
 	if (id == kDisc)
 		return discName (choice);
+	if (id == kSpeed)
+		return speedName (choice);
 	if (id == kJumps)
 		return choice == 0 ? "Off" : (choice == 1 ? "On" : "");
 	return "";

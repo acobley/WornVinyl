@@ -583,12 +583,13 @@ Turntable::Turntable (const CRect& size)
 	setMouseEnabled (false);
 }
 
-void Turntable::setDisc (int era, int disc)
+void Turntable::setDisc (int era, int disc, int speed)
 {
-	if (era != mEra || disc != mDisc)
+	if (era != mEra || disc != mDisc || speed != mSpeed)
 	{
 		mEra = era;
 		mDisc = disc;
+		mSpeed = speed;
 		invalid ();
 	}
 }
@@ -711,7 +712,7 @@ void Turntable::draw (CDrawContext* context)
 	}
 
 	// ---- the captions -------------------------------------------------------------
-	drawLettering (context, rpmText (playing), kTextScreen, Palette::kScreenText, r.left + 10, r.top + 14);
+	drawLettering (context, rpmText (mEra, mDisc, mSpeed), kTextScreen, Palette::kScreenText, r.left + 10, r.top + 14);
 	if (mSkipping)
 		drawLettering (context, "STUCK", kTextScreen, Palette::kRed, r.right - 10, r.top + 14, Align::Right);
 	drawLettering (context, isStereo (mEra) ? "STEREO" : "MONO", kTextScreen, Palette::kScreenText, r.left + 10,

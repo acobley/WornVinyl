@@ -27,13 +27,17 @@ const ParamDef kParams[kNumParams] =
 
 	{ kDiscAngle,   "Disc Angle", "",   ParamType::Float, 0.0,          1.0,             0.0,               0.0,          1.0,             0              },
 	{ kSkipping,    "Skipping",   "",   ParamType::Float, 0.0,          1.0,             0.0,               0.0,          1.0,             0              },
+
+	{ kSpeed,       "Speed",      "",   ParamType::Enum,  0.0,          kSpeedCount - 1, kSpeedDefault,     0.0,          kSpeedCount - 1, kSpeedCount - 1 },
 };
 
 //------------------------------------------------------------------------
 // The table is written by hand, so prove its shape at COMPILE time - a
 // row in the wrong place presents as "the Dust knob moves the wow".
 //------------------------------------------------------------------------
-static_assert (kNumParams == 12, "ten settings, two outputs");
+static_assert (kNumParams == 13, "ten settings, two outputs, then Speed (a late setting)");
+static_assert (! isOutputParam (kSpeed) && isLateSetting (kSpeed) && ! isLateSetting (kOutput),
+               "Speed is a setting saved after the bypass, not an output");
 static_assert (kNumStoredParams == 10, "only the settings are saved");
 static_assert (isOutputParam (kDiscAngle) && isOutputParam (kSkipping) && ! isOutputParam (kOutput),
                "output block boundaries");

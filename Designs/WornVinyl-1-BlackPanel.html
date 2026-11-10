@@ -26,7 +26,7 @@ T('1960S  /  STEREO VINYL  /  33 RPM  /  28 HZ - 15 KHZ', 314, 32, 10.5, INK, fa
 
 // ---- sections ----
 const sections = [
-  ['RECORD', 'ERA + DISC', 16, 72, 296, 464],
+  ['RECORD', 'ERA, DISC + SPEED', 16, 72, 296, 464],
   ['TURNTABLE', '', 312, 72, 632, 464],
   ['SURFACE', 'WHAT THE STYLUS MEETS', 648, 72, 984, 262],
   ['SPEED', 'THE PLATTER + THE DISC', 648, 278, 984, 464],
@@ -86,8 +86,9 @@ function selector(cx, cy, d, names, angles, set, label, nameY, locked) {
 
 // RECORD: era (five positions), disc (two), then output
 selector(156, 160, 56, ['1920', '1940', '1950', '1960', '1970'], [-90, -45, 0, 45, 90], 3, 'ERA', 210);
-selector(156, 266, 40, ['SHELLAC', 'VINYL'], [-45, 45], 1, 'DISC', 302);
-T('SET BY THE ERA', 156, 318, 8.5, SOFT, false, 'middle');
+selector(96, 266, 40, ['SHELLAC', 'VINYL'], [-45, 45], 1, 'DISC', 302);
+T('SET BY THE ERA', 96, 318, 8.5, SOFT, false, 'middle');
+selector(226, 266, 40, ['AUTO', '33', '45', '78'], [-90, -30, 30, 90], 0, 'SPEED', 302);
 knob(96, 364, 52, 1.0, 'MIX', '100 %');
 knob(216, 364, 52, 0.5, 'OUTPUT', '+0.0 DB');
 
@@ -101,7 +102,7 @@ T('THE NEEDLE CAN JUMP ABOVE 60 % SCRATCHES', 664, 244, 8.5, SOFT, false);
 knob(718, 318, 52, 0.15, 'WOW', '15 %');
 knob(816, 318, 52, 0.10, 'FLUTTER', '10 %');
 knob(914, 318, 52, 0.25, 'WARP', '25 %');
-T('WOW 0.56 HZ  /  FLUTTER 6 - 11 HZ  /  ONE WARP A TURN', 664, 444, 8.5, SOFT, false);
+T('WOW 0.56 HZ  /  FLUTTER 7 - 11 HZ  /  ONE WARP A TURN', 664, 444, 8.5, SOFT, false);
 
 // TURNTABLE: the OLED with the disc turning on it
 const SX = 330, SY = 114, SW = 284, SH = 280;

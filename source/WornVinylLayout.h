@@ -9,7 +9,8 @@
 //
 //   header      WORN VINYL, and a line saying what is playing
 //   RECORD      ERA (five positions), DISC (two - set by the era but in
-//               the 1950s), then OUTPUT: Mix and Output
+//               the 1950s) and SPEED (Auto / 33 / 45 / 78) side by side,
+//               then OUTPUT: Mix and Output
 //   TURNTABLE   the OLED: the disc turning at its real speed, the
 //               scratches where the stylus meets them, the dust, the arm
 //               lifting over a warp; the SKIP lamp and a line under it
@@ -103,7 +104,7 @@ struct Section
 };
 
 constexpr Section kSections[] = {
-	{ { 16, 72, 296, 464 },  "RECORD",    "ERA + DISC" },
+	{ { 16, 72, 296, 464 },  "RECORD",    "ERA, DISC + SPEED" },
 	{ { 312, 72, 632, 464 }, "TURNTABLE", "" },
 	{ { 648, 72, 984, 262 }, "SURFACE",   "WHAT THE STYLUS MEETS" },
 	{ { 648, 278, 984, 464 }, "SPEED",    "THE PLATTER + THE DISC" },
@@ -132,7 +133,8 @@ enum class Kind { Knob, Selector };
 enum Tag
 {
 	kTagEra = 0, kTagDisc = 1, kTagScratches = 2, kTagDust = 3, kTagWow = 4,
-	kTagFlutter = 5, kTagWarp = 6, kTagJumps = 7, kTagMix = 8, kTagOutput = 9
+	kTagFlutter = 5, kTagWarp = 6, kTagJumps = 7, kTagMix = 8, kTagOutput = 9,
+	kTagSpeed = 12      // appended after the two outputs (10, 11)
 };
 
 struct Control
@@ -153,7 +155,8 @@ constexpr Rect knobRect (int cx, int top, int diameter)
 
 constexpr Control kControls[] = {
 	{ kTagEra,       Kind::Selector, 0, { 36, 106, 276, 216 }, 56, 156, "ERA" },
-	{ kTagDisc,      Kind::Selector, 0, { 56, 220, 256, 304 }, 40, 156, "DISC" },
+	{ kTagDisc,      Kind::Selector, 0, { 24, 220, 156, 304 }, 40, 96,  "DISC" },
+	{ kTagSpeed,     Kind::Selector, 0, { 160, 220, 288, 304 }, 40, 226, "SPEED" },
 	{ kTagMix,       Kind::Knob,     0, knobRect (96, 364, 52),  52, 96,  "MIX" },
 	{ kTagOutput,    Kind::Knob,     0, knobRect (216, 364, 52), 52, 216, "OUTPUT" },
 	{ kTagScratches, Kind::Knob,     2, knobRect (704, 112, 52), 52, 704, "SCRATCHES" },
@@ -308,7 +311,7 @@ inline int specksShown (double dustPct)
 constexpr Rect kRecordRule  { 30, 332, 282, 333 };
 constexpr Rect kOutputTitle { 30, 342, 130, 354 };      // "OUTPUT", block style
 
-constexpr Rect kDiscNote    { 36, 308, 276, 320 };      // centred: "SET BY THE ERA" / "1950S - YOUR CHOICE"
+constexpr Rect kDiscNote    { 24, 308, 168, 320 };      // centred under DISC: "SET BY THE ERA" / "1950S - YOUR CHOICE"
 constexpr Rect kSurfaceNote { 664, 236, 976, 248 };     // fixed
 constexpr Rect kSpeedLine   { 664, 436, 976, 448 };     // changes with the disc's speed
 constexpr Rect kLamp        { 336, 410, 420, 430 };     // the SKIP lamp and its name
@@ -343,17 +346,20 @@ inline std::string upperCase (std::string s)
 	return s;
 }
 
-inline std::string rpmText (int disc)
+/** "33 RPM", "45 RPM", "78 RPM" - the speed the disc turns at. */
+inline std::string rpmText (int era, int disc, int speed)
 {
-	return disc == kDiscShellac ? "78 RPM" : "33 RPM";
+	char b[16];
+	std::snprintf (b, sizeof b, "%.0f RPM", std::floor (turntableRpm (era, disc, speed)));
+	return b;
 }
 
 /** The header: "1960S / STEREO VINYL / 33 RPM / 28 HZ - 15 KHZ". */
-inline std::string headerLineText (int era, int disc)
+inline std::string headerLineText (int era, int disc, int speed)
 {
 	const int d = effectiveDisc (era, disc);
 	return upperCase (std::string (eraName (era)) + "  /  " + (isStereo (era) ? "STEREO " : "MONO ") +
-	                  discName (d) + "  /  " + rpmText (d) + "  /  " + bandwidthText (era, d));
+	                  discName (d) + "  /  " + rpmText (era, disc, speed) + "  /  " + bandwidthText (era, d));
 }
 
 inline std::string discNoteText (int era)
@@ -374,12 +380,12 @@ inline std::string turntableLineText (int era, int disc, double scratchesPct, do
 	return b;
 }
 
-/** Under the speed knobs: the wow is once a turn, so it follows the disc. */
-inline std::string speedLineText (int era, int disc)
+/** Under the speed knobs: the wow is once a turn, so it follows the speed. */
+inline std::string speedLineText (int era, int disc, int speed)
 {
 	char b[96];
 	std::snprintf (b, sizeof b, "WOW %.2f HZ  /  FLUTTER 7 - 11 HZ  /  ONE WARP A TURN",
-	               revolutionHz (effectiveDisc (era, disc)));
+	               turntableRpm (era, disc, speed) / 60.0);
 	return b;
 }
 

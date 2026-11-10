@@ -104,6 +104,13 @@ static void testSharedRules ()
 	CHECK (discLocked (kEra1920) && ! discLocked (kEra1950) && discLocked (kEra1970), "locked but the 50s");
 	CHECK (std::fabs (rpmOf (kDiscShellac) - 78.0) < 1e-9 && std::fabs (rpmOf (kDiscVinyl) - 33.3333333) < 1e-6, "rpm");
 	CHECK (! isStereo (kEra1950) && isStereo (kEra1960), "stereo from the 60s");
+	CHECK (turntableRpm (kEra1960, kDiscVinyl, kSpeedAuto) == rpmOf (kDiscVinyl), "Auto: an LP at 33");
+	CHECK (turntableRpm (kEra1920, kDiscVinyl, kSpeedAuto) == 78.0, "Auto: shellac at 78");
+	CHECK (turntableRpm (kEra1960, kDiscVinyl, kSpeed45) == 45.0, "45");
+	CHECK (turntableRpm (kEra1920, kDiscShellac, kSpeed33) == rpmOf (kDiscVinyl), "a 78 at 33");
+	for (int sp = 0; sp < kSpeedCount; ++sp)
+		CHECK (turntableRpm (kEra1950, kDiscVinyl, sp) >= rpmOf (kDiscVinyl),
+		       "nothing turns slower than 33 - the ring buffer is sized for it");
 
 	CHECK (activeScratches (0) == 0, "none at 0");
 	CHECK (activeScratches (0.1) == 1, "one at the first touch");
@@ -338,6 +345,67 @@ static void testJumps ()
 }
 
 //------------------------------------------------------------------------
+static void testSpeed ()
+{
+	std::printf ("speed: the disc turns at the switch's rpm, the music keeps its pitch\n");
+	const double fs = 48000;
+	for (int sp = 0; sp < kSpeedCount; ++sp)
+	{
+		Dsp d;
+		d.setSampleRate (fs);
+		d.setEra (kEra1960);
+		clean (d);
+		d.setSpeed (sp);
+		d.snapParameters ();
+		// Ten seconds of silence; count the turns by the angle wrapping.
+		std::vector<float> in (480, 0.0f), l, r;
+		int turns = 0;
+		double last = d.discAngle ();
+		for (int b = 0; b < 1000; ++b)
+		{
+			run (d, in, in, l, r, 480);
+			if (d.discAngle () < last)
+				++turns;
+			last = d.discAngle ();
+		}
+		const double rpm = d.rpm ();
+		const double expected = rpm / 6.0;   // turns in 10 s
+		std::printf ("  %-4s %5.1f rpm: %d turns in 10 s\n", speedName (sp), rpm, turns);
+		CHECK (std::abs (turns - expected) <= 1.0, "%s: %d turns, expected %.1f", speedName (sp), turns, expected);
+	}
+
+	// The pitch is untouched whatever the speed (wow off).
+	auto in = sine (fs, 1000, 4.0, 0.25);
+	Dsp d;
+	d.setSampleRate (fs);
+	d.setEra (kEra1970);
+	clean (d);
+	d.setSpeed (kSpeed78);
+	d.snapParameters ();
+	std::vector<float> l, r;
+	run (d, in, in, l, r);
+	CHECK (pitchDeviation (l, fs, 1000, 4800) < 0.0005, "78 rpm does not move the pitch");
+
+	// Wow follows the speed: the same depth, a faster wobble - so the read
+	// head swings LESS, and the 33 case stays the worst for the buffer.
+	auto wow = [&] (int sp) {
+		Dsp w;
+		w.setSampleRate (fs);
+		w.setEra (kEra1970);
+		clean (w);
+		w.setWowPct (100);
+		w.setSpeed (sp);
+		w.snapParameters ();
+		std::vector<float> ol, orr;
+		run (w, in, in, ol, orr);
+		return pitchDeviation (ol, fs, 1000, 4800);
+	};
+	const double w33 = wow (kSpeed33), w78 = wow (kSpeed78);
+	std::printf ("  wow 100 %%: peak deviation %.2f %% at 33, %.2f %% at 78\n", w33 * 100, w78 * 100);
+	CHECK (w78 > 0.008 && w78 < 0.018, "the same wow depth at 78");
+}
+
+//------------------------------------------------------------------------
 static void testMonoAndDeterminism ()
 {
 	std::printf ("mono eras, determinism\n");
@@ -449,6 +517,7 @@ int main ()
 	testWorstCase ();
 	testPitch ();
 	testJumps ();
+	testSpeed ();
 	testMonoAndDeterminism ();
 	testSmoothingAndEdges ();
 	testCost ();
