@@ -1,0 +1,17 @@
+build/
+build-make/
+external/
+.DS_Store
+
+# Installer build products. The .pkg is a GitHub RELEASE ASSET, not a commit.
+installer/build/
+installer/*.pkg
+installer/.built-from
+
+# Signing material. Never, under any circumstance.
+*.cer
+*.certSigningRequest
+*.p12
+*.pfx
+*.p8
+AuthKey_*
