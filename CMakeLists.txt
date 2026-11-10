@@ -265,7 +265,7 @@ endif()
 # binary hands a stranger your username and directory layout.
 #
 # -ffile-prefix-map REWRITES THE PREFIX AT COMPILE TIME, so __FILE__ becomes
-# "MasterLoud/external/..." instead. Note that -fdebug-prefix-map, which is the
+# "WornVinyl/external/..." instead. Note that -fdebug-prefix-map, which is the
 # one people reach for, does NOT do this: it rewrites debug info only and
 # leaves __FILE__ exactly as it was. -ffile-prefix-map is the superset of that
 # and -fmacro-prefix-map, and the macro half is the half that matters here.

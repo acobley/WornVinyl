@@ -1,0 +1,146 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#121212}svg{display:block}</style>
+</head><body>
+<svg id="p" width="1000" height="480" xmlns="http://www.w3.org/2000/svg"></svg>
+<script src="rbfont.js"></script>
+<script>
+// WornVinyl - panel design 1: the black panel (R2Synth's Soviet-synth
+// look) with the 70s sci-fi lettering. Every number here is the one
+// source/WornVinylLayout.h uses.
+const W = 1000, H = 480, HDR = 56;
+const INK = '#f4f1e8', SOFT = '#b9b6ae', DIM = '#8f8c85', EDGE = '#d9d6cc', RED = '#e2342b';
+let s = '';
+const add = x => s += x;
+const T = (txt, x, y, fs, col = INK, bold = true, anchor = 'start') =>
+  add(`<text x="${x}" y="${y}" font-size="${fs}" font-weight="${bold ? 700 : 400}" fill="${col}" text-anchor="${anchor}">${txt}</text>`);
+const rad = d => d * Math.PI / 180;
+const fromTop = (cx, cy, r, deg) => [cx + r * Math.sin(rad(deg)), cy - r * Math.cos(rad(deg))];
+
+add(`<rect width="${W}" height="${H}" fill="#121212"/><rect width="${W}" height="${HDR}" fill="#0c0c0c"/>`);
+add(`<rect y="${HDR - 2}" width="${W}" height="2" fill="#e9e6dc"/>`);
+for (const [x, y] of [[8, 8], [W - 8, 8], [8, H - 8], [W - 8, H - 8]])
+  add(`<circle cx="${x}" cy="${y}" r="3.2" fill="#3a3a3a" stroke="#000" stroke-width=".6"/><line x1="${x - 2.2}" y1="${y - 2.2}" x2="${x + 2.2}" y2="${y + 2.2}" stroke="#222" stroke-width=".8"/>`);
+add(`<g id="wm"></g><rect x="300" y="16" width="1" height="24" fill="#5a5852"/>`);
+T('1960S  /  STEREO VINYL  /  33 RPM  /  28 HZ - 15 KHZ', 314, 32, 10.5, INK, false);
+
+// ---- sections ----
+const sections = [
+  ['RECORD', 'ERA + DISC', 16, 72, 296, 464],
+  ['TURNTABLE', '', 312, 72, 632, 464],
+  ['SURFACE', 'WHAT THE STYLUS MEETS', 648, 72, 984, 262],
+  ['SPEED', 'THE PLATTER + THE DISC', 648, 278, 984, 464],
+];
+for (const [t, sub, l, tp, r, b] of sections) {
+  add(`<rect x="${l + .5}" y="${tp + .5}" width="${r - l - 1}" height="${b - tp - 1}" rx="2" fill="#151515" stroke="${EDGE}" stroke-width="1.2"/>`);
+  const tw = rbPaths(t, 8.3, 1.25, 1.05).width + 16;
+  add(`<rect x="${l + 14}" y="${tp + 10}" width="${tw}" height="22" rx="2" fill="#151515" stroke="${EDGE}" stroke-width="1.2"/>`);
+  T(t, l + 22, tp + 25.5, 13);
+  if (sub) T(sub, l + 14 + tw + 12, tp + 25, 9, SOFT, false);
+}
+add(`<rect x="30" y="332" width="252" height="1" fill="#3a3a3a"/>`);
+T('OUTPUT', 30, 352, 10.5);
+
+// ---- knobs ----
+function knob(cx, top, d, value, label, reading) {
+  const cy = top + d / 2, outer = d / 2, body = outer - 6;
+  for (let i = 0; i <= 10; i++) {
+    const t = 135 + 27 * i, L = (i % 5 == 0);
+    const a = [cx + (body + 1.5) * Math.cos(rad(t)), cy + (body + 1.5) * Math.sin(rad(t))];
+    const b = [cx + (outer - (L ? 0 : 1.8)) * Math.cos(rad(t)), cy + (outer - (L ? 0 : 1.8)) * Math.sin(rad(t))];
+    add(`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#e9e6dc" stroke-width="${L ? 1.3 : .9}" stroke-linecap="round"/>`);
+  }
+  const lo = fromTop(cx, cy, outer + 2, -138), hi = fromTop(cx, cy, outer + 2, 138);
+  T('0', lo[0] - 2, lo[1] + 6, 7.5, '#e9e6dc', false, 'end'); T('10', hi[0] + 2, hi[1] + 6, 7.5, '#e9e6dc', false);
+  let pts = [];
+  for (let i = 0; i < 56; i++) { const r = i % 2 ? body - 1.4 : body, t = rad(360 * i / 56); pts.push(`${cx + r * Math.cos(t)},${cy + r * Math.sin(t)}`); }
+  add(`<polygon points="${pts.join(' ')}" fill="#0a0a0a" stroke="#2f2f2f" stroke-width=".6"/>`);
+  add(`<defs><radialGradient id="g${cx}${top}" cx=".38" cy=".3" r=".9"><stop offset="0" stop-color="#3a3a3a"/><stop offset=".6" stop-color="#161616"/><stop offset="1" stop-color="#050505"/></radialGradient></defs>`);
+  add(`<circle cx="${cx}" cy="${cy}" r="${body * .78}" fill="url(#g${cx}${top})" stroke="#000" stroke-width=".8"/>`);
+  const a = 135 + 270 * value;
+  add(`<line x1="${cx + body * .15 * Math.cos(rad(a))}" y1="${cy + body * .15 * Math.sin(rad(a))}" x2="${cx + (body - .5) * Math.cos(rad(a))}" y2="${cy + (body - .5) * Math.sin(rad(a))}" stroke="${INK}" stroke-width="2.2" stroke-linecap="round"/>`);
+  T(reading, cx, top + d + 13, 10, INK, false, 'middle');
+  T(label, cx, top + d + 26, 9.5, INK, true, 'middle');
+}
+// selector: names hang from radius+12 at their angles
+function selector(cx, cy, d, names, angles, set, label, nameY, locked) {
+  const r = d / 2;
+  names.forEach((n, i) => {
+    const t = angles[i], on = i == set;
+    const a = fromTop(cx, cy, r + 2.5, t), b = fromTop(cx, cy, r + 8, t);
+    add(`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${on ? RED : '#e9e6dc'}" stroke-width="${on ? 2 : 1.6}" stroke-linecap="round"/>`);
+    const p = fromTop(cx, cy, r + 12, t);
+    const col = on ? INK : DIM;
+    if (Math.abs(t) < 10) T(n, p[0], p[1] - 4, 9.5, col, true, 'middle');
+    else if (Math.abs(t) > 80) T(n, t < 0 ? p[0] - 2 : p[0] + 2, p[1] + 4, 9.5, col, true, t < 0 ? 'end' : 'start');
+    else T(n, t < 0 ? p[0] - 2 : p[0] + 2, p[1] + 6, 9.5, col, true, t < 0 ? 'end' : 'start');
+  });
+  const a = angles[set];
+  add(`<circle cx="${cx}" cy="${cy}" r="${r * .8}" fill="#0b0b0b" stroke="#444" stroke-width=".8"/>`);
+  const tip = fromTop(cx, cy, r + 3, a), L = fromTop(cx, cy, 8, a - 90), R = fromTop(cx, cy, 8, a + 90), tail = fromTop(cx, cy, r, a + 180);
+  add(`<path d="M${tip} L${R} Q${tail} ${L} Z" fill="#1c1c1c" stroke="#000" stroke-width=".8"/>`);
+  const s0 = fromTop(cx, cy, 2, a);
+  add(`<line x1="${s0[0]}" y1="${s0[1]}" x2="${tip[0]}" y2="${tip[1]}" stroke="${INK}" stroke-width="1.8" stroke-linecap="round"/>`);
+  T(label, cx, nameY, 9.5, INK, true, 'middle');
+}
+
+// RECORD: era (five positions), disc (two), then output
+selector(156, 160, 56, ['1920', '1940', '1950', '1960', '1970'], [-90, -45, 0, 45, 90], 3, 'ERA', 210);
+selector(156, 266, 40, ['SHELLAC', 'VINYL'], [-45, 45], 1, 'DISC', 302);
+T('SET BY THE ERA', 156, 318, 8.5, SOFT, false, 'middle');
+knob(96, 364, 52, 1.0, 'MIX', '100 %');
+knob(216, 364, 52, 0.5, 'OUTPUT', '+0.0 DB');
+
+// SURFACE
+knob(704, 112, 52, 0.35, 'SCRATCHES', '35 %');
+knob(806, 112, 52, 0.30, 'DUST', '30 %');
+selector(920, 158, 40, ['OFF', 'ON'], [-45, 45], 1, 'JUMPS', 202);
+T('THE NEEDLE CAN JUMP ABOVE 60 % SCRATCHES', 664, 244, 8.5, SOFT, false);
+
+// SPEED
+knob(718, 318, 52, 0.15, 'WOW', '15 %');
+knob(816, 318, 52, 0.10, 'FLUTTER', '10 %');
+knob(914, 318, 52, 0.25, 'WARP', '25 %');
+T('WOW 0.56 HZ  /  FLUTTER 6 - 11 HZ  /  ONE WARP A TURN', 664, 444, 8.5, SOFT, false);
+
+// TURNTABLE: the OLED with the disc turning on it
+const SX = 330, SY = 114, SW = 284, SH = 280;
+add(`<rect x="${SX - 3.5}" y="${SY - 3.5}" width="${SW + 7}" height="${SH + 7}" rx="4" fill="#050505" stroke="#3c3c3c"/>`);
+add(`<rect x="${SX}" y="${SY}" width="${SW}" height="${SH}" fill="#000"/>`);
+for (let x = SX + 8; x < SX + SW; x += 16) for (let y = SY + 8; y < SY + SH; y += 16) add(`<circle cx="${x}" cy="${y}" r=".7" fill="#2a2d33"/>`);
+const DX = SX + SW / 2, DY = SY + SH / 2 + 4, OLED = '#ffb02e', ang = 37;
+add(`<circle cx="${DX}" cy="${DY}" r="124" fill="none" stroke="${OLED}" stroke-opacity=".35" stroke-width="1"/>`);
+add(`<circle cx="${DX}" cy="${DY}" r="118" fill="#120c02" stroke="${OLED}" stroke-width="1.6"/>`);
+for (let r = 52; r <= 112; r += 3.2) add(`<circle cx="${DX}" cy="${DY}" r="${r}" fill="none" stroke="${OLED}" stroke-opacity="${.10 + .08 * ((r * 7) % 3)}" stroke-width=".6"/>`);
+add(`<circle cx="${DX}" cy="${DY}" r="40" fill="#1d3f8f" stroke="${OLED}" stroke-width="1.2"/>`);
+add(`<circle cx="${DX}" cy="${DY}" r="3" fill="#000" stroke="${OLED}" stroke-width="1"/>`);
+// label marks turn with the disc
+for (const off of [0, 180]) { const a = fromTop(DX, DY, 18, ang + off), b = fromTop(DX, DY, 34, ang + off); add(`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#f4f1e8" stroke-opacity=".7" stroke-width="1.6" stroke-linecap="round"/>`); }
+// scratches: radial marks at fixed angles on the disc
+for (const [p, st] of [[0.07, 1], [0.31, .6], [0.55, .8], [0.83, .45]]) {
+  const t = ang + p * 360, a = fromTop(DX, DY, 112 - 50 * st, t), b = fromTop(DX, DY, 113, t);
+  add(`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#ffffff" stroke-opacity="${.45 + .5 * st}" stroke-width="${.8 + .8 * st}" stroke-linecap="round"/>`);
+}
+for (let i = 0; i < 26; i++) { const t = ang + i * 137.5, r = 56 + (i * 37 % 56); const q = fromTop(DX, DY, r, t); add(`<circle cx="${q[0]}" cy="${q[1]}" r="${.6 + (i % 3) * .3}" fill="#fff" fill-opacity=".55"/>`); }
+// tonearm
+const PX = SX + SW - 22, PY = SY + 34, st = fromTop(DX, DY, 96, 62);
+add(`<circle cx="${PX}" cy="${PY}" r="9" fill="none" stroke="#8d96a3" stroke-width="1.4"/>`);
+add(`<line x1="${PX}" y1="${PY}" x2="${st[0]}" y2="${st[1]}" stroke="#c8ccd2" stroke-width="2.4" stroke-linecap="round"/>`);
+const armDeg = Math.atan2(st[1] - PY, st[0] - PX) * 180 / Math.PI;
+add(`<rect x="${st[0] - 7}" y="${st[1] - 4}" width="14" height="8" rx="1.5" fill="#c8ccd2" transform="rotate(${armDeg + 90} ${st[0]} ${st[1]})"/>`);
+T('33 RPM', SX + 10, SY + 17, 9.5, '#8d96a3', false);
+T('VINYL', SX + SW - 10, SY + SH - 9, 9.5, OLED, false, 'end');
+T('STEREO', SX + 10, SY + SH - 9, 9.5, '#8d96a3', false);
+// the skip lamp and the info line
+add(`<circle cx="344" cy="420" r="5" fill="#3a1512" stroke="#000"/>`);
+T('SKIP', 356, 424, 10.5);
+T('4 SCRATCHES  /  CRACKLE 22 A SECOND', 330, 448, 8.5, SOFT, false);
+
+document.getElementById('p').innerHTML = s;
+const wm = document.getElementById('wm');
+const big = (t, col, x) => { const a = rbPaths(t, 24, 1.7, 1.2); return { a, svg: `<g transform="translate(${x},16)"><g fill="none" stroke="${col}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${a.paths}</g><g fill="none" stroke="#0c0c0c" stroke-width=".32" stroke-linecap="round" stroke-linejoin="round">${a.paths}</g></g>` }; };
+const p1 = big('WORN', INK, 22), p2 = big('VINYL', INK, 22 + p1.a.width + 12);
+wm.innerHTML = p1.svg + p2.svg;
+window.wmWidth = p1.a.width + 12 + p2.a.width;
+rbConvert();
+</script></body></html>
