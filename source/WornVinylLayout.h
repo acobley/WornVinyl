@@ -11,7 +11,8 @@
 //   RECORD      ERA (five positions), DISC (two - set by the era but in
 //               the 1950s) and SPEED (Auto / 33 / 45 / 78) side by side,
 //               then OUTPUT: Mix and Output
-//   TURNTABLE   the OLED: the disc turning at its real speed, the
+//   TURNTABLE   PLAYER (Period / Modern) under it, and the OLED: the
+//               disc turning at its real speed, the
 //               scratches where the stylus meets them, the dust, the arm
 //               lifting over a warp; the SKIP lamp and a line under it
 //   SURFACE     Scratches, Dust, JUMPS
@@ -53,7 +54,7 @@ struct Box
 // The panel
 //------------------------------------------------------------------------
 constexpr int kEditorWidth  = 1000;
-constexpr int kEditorHeight = 480;
+constexpr int kEditorHeight = 520;   // 480 until PLAYER (10 Nov 2026) needed room under the screen
 constexpr int kHeaderHeight = 56;
 
 constexpr int kSectionRadius = 2;
@@ -91,7 +92,7 @@ constexpr double kWordmarkGap    = 12.0;     // between WORN and VINYL
 constexpr int    kHeaderDivider  = 300;
 constexpr Rect   kHeaderLine     { 314, 20, 984, 36 };
 
-constexpr struct { int x, y; } kScrews[] = { { 8, 8 }, { 992, 8 }, { 8, 472 }, { 992, 472 } };
+constexpr struct { int x, y; } kScrews[] = { { 8, 8 }, { 992, 8 }, { 8, 512 }, { 992, 512 } };
 
 //------------------------------------------------------------------------
 // Sections
@@ -104,10 +105,10 @@ struct Section
 };
 
 constexpr Section kSections[] = {
-	{ { 16, 72, 296, 464 },  "RECORD",    "ERA, DISC + SPEED" },
-	{ { 312, 72, 632, 464 }, "TURNTABLE", "" },
+	{ { 16, 72, 296, 504 },  "RECORD",    "ERA, DISC + SPEED" },
+	{ { 312, 72, 632, 504 }, "TURNTABLE", "" },
 	{ { 648, 72, 984, 262 }, "SURFACE",   "WHAT THE STYLUS MEETS" },
-	{ { 648, 278, 984, 464 }, "SPEED",    "THE PLATTER + THE DISC" },
+	{ { 648, 278, 984, 504 }, "SPEED",    "THE PLATTER + THE DISC" },
 };
 constexpr int kNumSections = static_cast<int> (sizeof (kSections) / sizeof (kSections[0]));
 
@@ -134,7 +135,8 @@ enum Tag
 {
 	kTagEra = 0, kTagDisc = 1, kTagScratches = 2, kTagDust = 3, kTagWow = 4,
 	kTagFlutter = 5, kTagWarp = 6, kTagJumps = 7, kTagMix = 8, kTagOutput = 9,
-	kTagSpeed = 12      // appended after the two outputs (10, 11)
+	kTagSpeed = 12,     // appended after the two outputs (10, 11)
+	kTagPlayer = 13
 };
 
 struct Control
@@ -157,14 +159,15 @@ constexpr Control kControls[] = {
 	{ kTagEra,       Kind::Selector, 0, { 36, 106, 276, 216 }, 56, 156, "ERA" },
 	{ kTagDisc,      Kind::Selector, 0, { 24, 220, 156, 304 }, 40, 96,  "DISC" },
 	{ kTagSpeed,     Kind::Selector, 0, { 160, 220, 288, 304 }, 40, 226, "SPEED" },
-	{ kTagMix,       Kind::Knob,     0, knobRect (96, 364, 52),  52, 96,  "MIX" },
-	{ kTagOutput,    Kind::Knob,     0, knobRect (216, 364, 52), 52, 216, "OUTPUT" },
+	{ kTagMix,       Kind::Knob,     0, knobRect (96, 384, 52),  52, 96,  "MIX" },
+	{ kTagOutput,    Kind::Knob,     0, knobRect (216, 384, 52), 52, 216, "OUTPUT" },
+	{ kTagPlayer,    Kind::Selector, 1, { 494, 400, 630, 480 }, 40, 560, "PLAYER" },
 	{ kTagScratches, Kind::Knob,     2, knobRect (704, 112, 52), 52, 704, "SCRATCHES" },
 	{ kTagDust,      Kind::Knob,     2, knobRect (806, 112, 52), 52, 806, "DUST" },
 	{ kTagJumps,     Kind::Selector, 2, { 872, 112, 968, 205 },  40, 920, "JUMPS" },
-	{ kTagWow,       Kind::Knob,     3, knobRect (718, 318, 52), 52, 718, "WOW" },
-	{ kTagFlutter,   Kind::Knob,     3, knobRect (816, 318, 52), 52, 816, "FLUTTER" },
-	{ kTagWarp,      Kind::Knob,     3, knobRect (914, 318, 52), 52, 914, "WARP" },
+	{ kTagWow,       Kind::Knob,     3, knobRect (718, 338, 52), 52, 718, "WOW" },
+	{ kTagFlutter,   Kind::Knob,     3, knobRect (816, 338, 52), 52, 816, "FLUTTER" },
+	{ kTagWarp,      Kind::Knob,     3, knobRect (914, 338, 52), 52, 914, "WARP" },
 };
 constexpr int kNumControls = static_cast<int> (sizeof (kControls) / sizeof (kControls[0]));
 
@@ -308,14 +311,14 @@ inline int specksShown (double dustPct)
 //------------------------------------------------------------------------
 // The fixed captions, rules and the lines that change
 //------------------------------------------------------------------------
-constexpr Rect kRecordRule  { 30, 332, 282, 333 };
-constexpr Rect kOutputTitle { 30, 342, 130, 354 };      // "OUTPUT", block style
+constexpr Rect kRecordRule  { 30, 352, 282, 353 };
+constexpr Rect kOutputTitle { 30, 362, 130, 374 };      // "OUTPUT", block style
 
 constexpr Rect kDiscNote    { 24, 308, 168, 320 };      // centred under DISC: "SET BY THE ERA" / "1950S - YOUR CHOICE"
 constexpr Rect kSurfaceNote { 664, 236, 976, 248 };     // fixed
-constexpr Rect kSpeedLine   { 664, 436, 976, 448 };     // changes with the disc's speed
-constexpr Rect kLamp        { 336, 410, 420, 430 };     // the SKIP lamp and its name
-constexpr Rect kTurntableLine { 330, 440, 620, 452 };   // scratches and crackle
+constexpr Rect kSpeedLine   { 664, 476, 976, 488 };     // changes with the disc's speed
+constexpr Rect kLamp        { 336, 412, 420, 432 };     // the SKIP lamp and its name
+constexpr Rect kTurntableLine { 330, 482, 620, 494 };   // scratches and crackle
 
 constexpr const char* kSurfaceNoteText = "THE NEEDLE CAN JUMP ABOVE 60 % SCRATCHES";
 
@@ -354,12 +357,13 @@ inline std::string rpmText (int era, int disc, int speed)
 	return b;
 }
 
-/** The header: "1960S / STEREO VINYL / 33 RPM / 28 HZ - 15 KHZ". */
-inline std::string headerLineText (int era, int disc, int speed)
+/** The header: "1960S / STEREO VINYL / 33 RPM / 28 HZ - 15 KHZ / PERIOD PLAYER". */
+inline std::string headerLineText (int era, int disc, int speed, int player)
 {
 	const int d = effectiveDisc (era, disc);
 	return upperCase (std::string (eraName (era)) + "  /  " + (isStereo (era) ? "STEREO " : "MONO ") +
-	                  discName (d) + "  /  " + rpmText (era, disc, speed) + "  /  " + bandwidthText (era, d));
+	                  discName (d) + "  /  " + rpmText (era, disc, speed) + "  /  " + bandwidthText (era, d) +
+	                  "  /  " + playerName (player) + " PLAYER");
 }
 
 inline std::string discNoteText (int era)

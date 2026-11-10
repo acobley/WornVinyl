@@ -2,15 +2,19 @@
 // WornVinyl - the audio line
 //
 // A record player in front of the track: the music is read back off a
-// "disc" that turns at 78 or 33 1/3 rpm, through the playback chain of
-// its decade, with the disc's own faults added at the stylus.
+// "disc" that turns at 78, 45 or 33 1/3 rpm. The era's recording chain is
+// cut into the groove with the music; the disc's faults are met at the
+// stylus; the player decides what those faults sound like.
 //
 //   input -> ring buffer --(modulated read: wow, flutter, warp, jumps)-->
 //         -> mono / stereo width of the era
-//         + surface hiss, rumble, crackle (Dust), scratch ticks (Scratches)
-//         -> the era's playback EQ (high-pass, 4-pole low-pass, the horn's
-//            or the pickup's resonances), the warp's HF loss and level dip
-//         -> a gentle saturation, a make-up gain from the EQ itself
+//         -> THE RECORDING (music only): the era's EQ - high-pass, 4-pole
+//            low-pass, the horn's resonances - the lathe's saturation and a
+//            make-up gain from the EQ itself
+//         + THE SURFACE through THE PLAYER: hiss, rumble, crackle (Dust),
+//            scratch ticks (Scratches), through the era's EQ again (Period)
+//            or a modern turntable's (Modern)
+//         -> the warp's HF loss and level dip (the stylus lifting: both)
 //         -> Mix against the dry signal (delayed by the same latency)
 //         -> Output
 //
@@ -76,6 +80,23 @@ constexpr double rpmOf (int disc) { return disc == kDiscShellac ? 78.0 : 100.0 /
 constexpr double revolutionHz (int disc) { return rpmOf (disc) / 60.0; }
 
 //------------------------------------------------------------------------
+/** THE PLAYER SWITCH. The era's EQ is cut into the groove with the music;
+    the player decides what the SURFACE sounds like. Period: a player as
+    old as the disc, the era's band again, so dust and scratches come out
+    as dull as the music (the sound before this switch existed). Modern: a
+    good turntable today, wide open, so the crackle is bright and crisp
+    over the old sound. The music is the same either way. */
+enum Player
+{
+	kPlayerPeriod,
+	kPlayerModern,
+	kPlayerCount
+};
+constexpr int kPlayerDefault = kPlayerPeriod;
+
+const char* playerName (int player);   // "Period", "Modern"
+
+//------------------------------------------------------------------------
 /** THE SPEED SWITCH: Auto plays the disc at its own speed (78 shellac,
     33 1/3 vinyl); the others turn any disc at that speed - a 1960s 45
     single, a shellac 78 put on at 33. It sets how often the disc's faults
@@ -124,6 +145,10 @@ struct Profile
 };
 
 const Profile& profileOf (int era, int disc);
+
+/** The surface's EQ - the player's: the era's own (Period) or a modern
+    turntable's 20 Hz - 20 kHz (Modern). Only hp, lp and the peaks count. */
+const Profile& playerProfile (int era, int disc, int player);
 
 /** "30 Hz - 15 kHz", from the profile - the header line and the tests. */
 std::string bandwidthText (int era, int disc);
@@ -257,6 +282,7 @@ public:
 	void setEra (int era);
 	void setDisc (int disc);
 	void setSpeed (int speed);
+	void setPlayer (int player);
 	void setScratchesPct (double pct) { mScratches.target = clampPct (pct); }
 	void setDustPct (double pct)      { mDust.target = clampPct (pct); }
 	void setWowPct (double pct)       { mWow.target = clampPct (pct); }
@@ -319,6 +345,7 @@ private:
 	double bipolar ();          // [-1, 1)
 
 	void designProfile ();
+	void markIfChanged ();
 	void triggerGrain (double noiseAmp, double noiseTauS, double ringAmp, double ringHz, double ringTauS,
 	                   double pan, bool stereo);
 	void startJump (double newOffset);
@@ -329,6 +356,8 @@ private:
 	int mEra = kEraDefault;
 	int mDisc = kDiscDefault;
 	int mSpeed = kSpeedDefault;
+	int mPlayer = kPlayerDefault;
+	int mActivePlayer = kPlayerDefault;
 
 	// the profile in use, and the one asked for (an era change fades out,
 	// swaps, fades in - a new EQ's state on the old signal would thump)
@@ -363,7 +392,8 @@ private:
 	double mRumbleNorm = 1.0, mHissNorm = 1.0;
 
 	// the chain
-	EraEq mEqL, mEqR;
+	EraEq mEqL, mEqR;           // the recording - the music
+	EraEq mPlayL, mPlayR;       // the player - the surface
 	double mMakeupDb = 0.0;
 	double mWarpLpL = 0.0, mWarpLpR = 0.0, mWarpLpCoef = 1.0;
 	int mCoefCountdown = 0;

@@ -84,11 +84,12 @@ Every row carries normalised, plain and internal ranges; internal == plain
 | 10 | Disc Angle | 0–1 | **output**, hidden: the turntable screen |
 | 11 | Skipping | 0/1 | **output**, hidden: the SKIP lamp (latched in the controller) |
 | 12 | Speed | Auto / 33 / 45 / 78, default Auto | **appended 10 Nov 2026**, a late setting (after the outputs). Auto = the disc's own speed (78 shellac, 33⅓ vinyl). Moves only the motor: scratch ticks, wow rate, warp, a stuck groove's length. The music keeps its pitch and tempo (tested) |
+| 13 | Player | Period / Modern, default Period | **appended 10 Nov 2026**, a late setting saved after Speed. What the SURFACE sounds like: Period = the era's EQ again (dull crackle, how it sounded before), Modern = a 20 Hz – 20 kHz turntable (bright crackle over the old music). The music is bit-identical either way (tested) |
 | 1000 | Bypass | Off / On | through the DSP, so the latency holds |
 
 **State v1:** `int32 version`, ten `double` settings, `int32 bypass`, then
-`int32 speed` (appended without a version bump, so an older build still opens
-a newer project; a stream without it is Auto). A short
+`int32 speed`, `int32 player` (appended without a version bump, so an older
+build still opens a newer project; a stream without them is Auto / Period). A short
 stream resets what it omits to default; processor and controller read the
 same layout. `setState` (UI thread) parks the values and the audio thread
 takes them at the top of the next `process()` and snaps the smoothers — the
@@ -99,14 +100,24 @@ DSP is never touched from the UI thread.
 ```
 input → ring buffer ─(read: 12 ms + wow + drift + flutter + warp + jump offset, Hermite)→
       → mono sum / stereo width of the era
-      + hiss (shellac: band-passed 2.5 kHz roar; vinyl: soft and dark), rumble (25 Hz),
-        crackle grains (ticks, 10 % pops), scratch ticks (one per scratch per turn)
-      → era EQ: 2-pole HP, 4-pole Butterworth LP, two resonances (the 1920s horn)
-      → warp: HF loss and level dip at the high spot
-      → saturation: (1−d)·x + d·tanh(1.5x)/1.5 — unity small-signal
-      → make-up gain (the EQ's mean power 125 Hz–4 kHz put back, capped −3…+9 dB)
+      → THE RECORDING, music only: era EQ (2-pole HP, 4-pole Butterworth LP, two
+        resonances - the 1920s horn) → lathe saturation (1−d)·x + d·tanh(1.5x)/1.5
+        → make-up gain (the EQ's mean power 125 Hz–4 kHz put back, −3…+9 dB)
+      + THE SURFACE through THE PLAYER: hiss (shellac: band-passed 2.5 kHz roar;
+        vinyl: soft and dark), rumble (25 Hz), crackle grains (ticks, 10 % pops),
+        scratch ticks - through the era EQ again (Period) or 20 Hz–20 kHz (Modern)
+      → warp: HF loss and level dip at the high spot (the stylus lifting: both)
       → Mix, Output, Bypass
 ```
+
+**Why split (10 Nov 2026).** The era's colour is cut into the groove with the
+music, but the dust and scratches are met at the stylus and only go through
+the PLAYER. Before the split one EQ sat after the surface - the same as Period
+today (measured: the clean-patch levels are unchanged; the surface alone is
+within 1.5 dB, as it no longer takes the make-up gain or the saturation).
+Modern is the sound of most transfers of old 78s: a 1920s surface measured
+**9.1 dB** more treble than Period; a 1970s LP's only 0.8 dB (its band is
+nearly modern anyway).
 
 | Era / disc | Band | Width | Notes |
 |---|---|---|---|
@@ -153,7 +164,7 @@ MasterLoud in the entry file.
 
 ![The panel](Designs/WornVinyl-1-BlackPanel.png)
 
-1000 × 480. `WornVinylLayout.h` (VSTGUI-free, read by the tests) has every
+1000 × 520 (480 until PLAYER needed room under the screen). `WornVinylLayout.h` (VSTGUI-free, read by the tests) has every
 rectangle, the selector geometry (now 2, 3, 4 or **5** positions — Era's are
 at −90/−45/0/45/90°, Speed's four at −90/−30/30/90°) and the readout formatters; `WornVinylPanelViews.*` has
 R2Synth's `Knob` and `RotarySwitch` (wear removed; the switch can be
@@ -170,12 +181,12 @@ needle is stuck. Era label colours are generic period colours, no company's.
 ## 8. Verification (VM, 10 Nov 2026)
 
 ```sh
-tools/run-tests.sh                       # DSP 103, Layout 579, Params 115 — 0 failed (cloud VM and the Mac's VM, with Speed)
+tools/run-tests.sh                       # DSP 108, Layout 605, Params 128 — 0 failed (with Speed and Player)
 SDK=external/vst3sdk   # (in the VM: a clean 3.8.1_build_84 clone)
 for f in source/*.cpp; do
   g++ -c -std=c++17 -DLINUX=1 -DRELEASE=1 -I$SDK -I$SDK/vstgui4 -Isource -o /tmp/$(basename $f .cpp).o $f
 done
-nm -C /tmp/*.o | grep " U " | grep "WornVinyl::"   # all 36 defined in the objects
+nm -C /tmp/*.o | grep " U " | grep "WornVinyl::"   # all 38 defined in the objects
 ```
 
 Measured: default patch with a −12 dBFS 1 kHz sine → output peak **−9.1 dBFS**

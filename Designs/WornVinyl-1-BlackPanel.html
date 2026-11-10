@@ -2,13 +2,13 @@
 <html><head><meta charset="utf-8">
 <style>html,body{margin:0;background:#121212}svg{display:block}</style>
 </head><body>
-<svg id="p" width="1000" height="480" xmlns="http://www.w3.org/2000/svg"></svg>
+<svg id="p" width="1000" height="520" xmlns="http://www.w3.org/2000/svg"></svg>
 <script src="rbfont.js"></script>
 <script>
 // WornVinyl - panel design 1: the black panel (R2Synth's Soviet-synth
 // look) with the 70s sci-fi lettering. Every number here is the one
 // source/WornVinylLayout.h uses.
-const W = 1000, H = 480, HDR = 56;
+const W = 1000, H = 520, HDR = 56;
 const INK = '#f4f1e8', SOFT = '#b9b6ae', DIM = '#8f8c85', EDGE = '#d9d6cc', RED = '#e2342b';
 let s = '';
 const add = x => s += x;
@@ -22,14 +22,14 @@ add(`<rect y="${HDR - 2}" width="${W}" height="2" fill="#e9e6dc"/>`);
 for (const [x, y] of [[8, 8], [W - 8, 8], [8, H - 8], [W - 8, H - 8]])
   add(`<circle cx="${x}" cy="${y}" r="3.2" fill="#3a3a3a" stroke="#000" stroke-width=".6"/><line x1="${x - 2.2}" y1="${y - 2.2}" x2="${x + 2.2}" y2="${y + 2.2}" stroke="#222" stroke-width=".8"/>`);
 add(`<g id="wm"></g><rect x="300" y="16" width="1" height="24" fill="#5a5852"/>`);
-T('1960S  /  STEREO VINYL  /  33 RPM  /  28 HZ - 15 KHZ', 314, 32, 10.5, INK, false);
+T('1960S  /  STEREO VINYL  /  33 RPM  /  28 HZ - 15 KHZ  /  PERIOD PLAYER', 314, 32, 10.5, INK, false);
 
 // ---- sections ----
 const sections = [
-  ['RECORD', 'ERA, DISC + SPEED', 16, 72, 296, 464],
-  ['TURNTABLE', '', 312, 72, 632, 464],
+  ['RECORD', 'ERA, DISC + SPEED', 16, 72, 296, 504],
+  ['TURNTABLE', '', 312, 72, 632, 504],
   ['SURFACE', 'WHAT THE STYLUS MEETS', 648, 72, 984, 262],
-  ['SPEED', 'THE PLATTER + THE DISC', 648, 278, 984, 464],
+  ['SPEED', 'THE PLATTER + THE DISC', 648, 278, 984, 504],
 ];
 for (const [t, sub, l, tp, r, b] of sections) {
   add(`<rect x="${l + .5}" y="${tp + .5}" width="${r - l - 1}" height="${b - tp - 1}" rx="2" fill="#151515" stroke="${EDGE}" stroke-width="1.2"/>`);
@@ -38,8 +38,8 @@ for (const [t, sub, l, tp, r, b] of sections) {
   T(t, l + 22, tp + 25.5, 13);
   if (sub) T(sub, l + 14 + tw + 12, tp + 25, 9, SOFT, false);
 }
-add(`<rect x="30" y="332" width="252" height="1" fill="#3a3a3a"/>`);
-T('OUTPUT', 30, 352, 10.5);
+add(`<rect x="30" y="352" width="252" height="1" fill="#3a3a3a"/>`);
+T('OUTPUT', 30, 372, 10.5);
 
 // ---- knobs ----
 function knob(cx, top, d, value, label, reading) {
@@ -89,8 +89,8 @@ selector(156, 160, 56, ['1920', '1940', '1950', '1960', '1970'], [-90, -45, 0, 4
 selector(96, 266, 40, ['SHELLAC', 'VINYL'], [-45, 45], 1, 'DISC', 302);
 T('SET BY THE ERA', 96, 318, 8.5, SOFT, false, 'middle');
 selector(226, 266, 40, ['AUTO', '33', '45', '78'], [-90, -30, 30, 90], 0, 'SPEED', 302);
-knob(96, 364, 52, 1.0, 'MIX', '100 %');
-knob(216, 364, 52, 0.5, 'OUTPUT', '+0.0 DB');
+knob(96, 384, 52, 1.0, 'MIX', '100 %');
+knob(216, 384, 52, 0.5, 'OUTPUT', '+0.0 DB');
 
 // SURFACE
 knob(704, 112, 52, 0.35, 'SCRATCHES', '35 %');
@@ -99,10 +99,10 @@ selector(920, 158, 40, ['OFF', 'ON'], [-45, 45], 1, 'JUMPS', 202);
 T('THE NEEDLE CAN JUMP ABOVE 60 % SCRATCHES', 664, 244, 8.5, SOFT, false);
 
 // SPEED
-knob(718, 318, 52, 0.15, 'WOW', '15 %');
-knob(816, 318, 52, 0.10, 'FLUTTER', '10 %');
-knob(914, 318, 52, 0.25, 'WARP', '25 %');
-T('WOW 0.56 HZ  /  FLUTTER 7 - 11 HZ  /  ONE WARP A TURN', 664, 444, 8.5, SOFT, false);
+knob(718, 338, 52, 0.15, 'WOW', '15 %');
+knob(816, 338, 52, 0.10, 'FLUTTER', '10 %');
+knob(914, 338, 52, 0.25, 'WARP', '25 %');
+T('WOW 0.56 HZ  /  FLUTTER 7 - 11 HZ  /  ONE WARP A TURN', 664, 484, 8.5, SOFT, false);
 
 // TURNTABLE: the OLED with the disc turning on it
 const SX = 330, SY = 114, SW = 284, SH = 280;
@@ -133,9 +133,10 @@ T('33 RPM', SX + 10, SY + 17, 9.5, '#8d96a3', false);
 T('VINYL', SX + SW - 10, SY + SH - 9, 9.5, OLED, false, 'end');
 T('STEREO', SX + 10, SY + SH - 9, 9.5, '#8d96a3', false);
 // the skip lamp and the info line
-add(`<circle cx="344" cy="420" r="5" fill="#3a1512" stroke="#000"/>`);
-T('SKIP', 356, 424, 10.5);
-T('4 SCRATCHES  /  CRACKLE 22 A SECOND', 330, 448, 8.5, SOFT, false);
+add(`<circle cx="344" cy="422" r="5" fill="#3a1512" stroke="#000"/>`);
+T('SKIP', 356, 426, 10.5);
+selector(560, 446, 40, ['PERIOD', 'MODERN'], [-45, 45], 0, 'PLAYER', 478);
+T('4 SCRATCHES  /  CRACKLE 22 A SECOND', 330, 492, 8.5, SOFT, false);
 
 document.getElementById('p').innerHTML = s;
 const wm = document.getElementById('wm');

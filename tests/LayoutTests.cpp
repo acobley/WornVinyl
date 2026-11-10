@@ -43,7 +43,7 @@ Box box (const Rect& r) { return { double (r.left), double (r.top), double (r.ri
 
 int positionsOf (int tag)
 {
-	return tag == kTagEra ? kEraCount : (tag == kTagSpeed ? kSpeedCount : 2);
+	return tag == kTagEra ? kEraCount : (tag == kTagSpeed ? kSpeedCount : 2);   // Disc, Jumps, Player: two
 }
 std::string positionName (int tag, int i)
 {
@@ -57,6 +57,8 @@ std::string positionName (int tag, int i)
 		return upperCase (discName (i));
 	if (tag == kTagSpeed)
 		return i == kSpeedAuto ? "AUTO" : speedName (i);
+	if (tag == kTagPlayer)
+		return upperCase (playerName (i));
 	return i ? "ON" : "OFF";
 }
 
@@ -95,8 +97,8 @@ int main ()
 	}
 
 	std::printf ("controls\n");
-	CHECK (kNumControls == 11, "every setting has a control");
-	for (int tag : { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12 })
+	CHECK (kNumControls == 12, "every setting has a control");
+	for (int tag : { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13 })
 		CHECK (controlFor (tag) != nullptr, "tag %d is on the panel", tag);
 	CHECK (controlFor (10) == nullptr && controlFor (11) == nullptr, "the outputs have no control");
 	for (int i = 0; i < kNumControls; ++i)
@@ -161,6 +163,9 @@ int main ()
 	}
 	CHECK (specksShown (0) == 0 && specksShown (100) == kMaxSpecks, "specks follow Dust");
 	CHECK (inside (kLamp, tt) && kLamp.top > bezelOf (kScreen).bottom, "the lamp under the screen");
+	CHECK (controlFor (kTagPlayer)->r.top > bezelOf (kScreen).bottom && controlFor (kTagPlayer)->r.bottom <= kTurntableLine.top,
+	       "PLAYER between the screen and the line");
+	CHECK (! overlap (box (kLamp), box (controlFor (kTagPlayer)->r)), "the lamp clear of PLAYER");
 	CHECK (inside (kTurntableLine, tt) && kTurntableLine.top >= kLamp.bottom, "the line under the lamp");
 	CHECK (14 + 20 + Lettering::width ("SKIP", kTextBlock) <= kLamp.width () + 14, "SKIP fits its lamp");
 	{
@@ -176,7 +181,7 @@ int main ()
 		for (int d = 0; d < kDiscCount; ++d)
 		for (int sp = 0; sp < kSpeedCount; ++sp)
 		{
-			const std::string h = headerLineText (e, d, sp);
+			const std::string h = headerLineText (e, d, sp, sp % 2);
 			CHECK (allDrawable (h), "every character drawable: %s", h.c_str ());
 			if (Lettering::width (h, kTextHeader) > headerMax)
 				headerMax = Lettering::width (h, kTextHeader), headerLongest = h;

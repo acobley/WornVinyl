@@ -61,6 +61,7 @@ enum Param : Steinberg::Vst::ParamID
 	// isLateSetting and the state layout in WornVinylProcessor.cpp.
 	//--------------------------------------------------------------------
 	kSpeed,         // 12  Auto / 33 / 45 / 78 rpm - how fast the disc turns
+	kPlayer,        // 13  Period / Modern - what the surface sounds like
 
 	kNumParams
 };
@@ -80,7 +81,7 @@ constexpr bool isOutputParam (Steinberg::Vst::ParamID id)
     the bypass, in id order. */
 constexpr bool isLateSetting (Steinberg::Vst::ParamID id)
 {
-	return id == kSpeed;
+	return id == kSpeed || id == kPlayer;
 }
 
 /** The settings run from 0 to here and are saved; the outputs follow. */
@@ -166,6 +167,8 @@ inline const char* enumChoiceName (Steinberg::Vst::ParamID id, int choice)
 		return discName (choice);
 	if (id == kSpeed)
 		return speedName (choice);
+	if (id == kPlayer)
+		return playerName (choice);
 	if (id == kJumps)
 		return choice == 0 ? "Off" : (choice == 1 ? "On" : "");
 	return "";

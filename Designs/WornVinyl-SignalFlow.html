@@ -47,7 +47,7 @@ header { display: grid; gap: 10px; border-bottom: 2px solid var(--edge); padding
 <div class="page">
   <header>
     <div class="wordmark" id="wordmark" aria-label="Worn Vinyl signal flow"></div>
-    <p class="lede">How audio moves through the plug-in, from the stereo input to the stereo output. The music is written onto a turning “disc”, read back with the record’s faults, put through the decade’s playback chain, then mixed with the dry signal.</p>
+    <p class="lede">How audio moves through the plug-in, from the stereo input to the stereo output. The music is written onto a turning “disc”, read back with the record’s faults, given the decade’s recording sound, joined by the record’s surface as the chosen player hears it, then mixed with the dry signal.</p>
     <div class="legend" aria-label="Legend">
       <span><svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#f4f1e8" stroke-width="2"/></svg>audio</span>
       <span><svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#ffb02e" stroke-width="1.6" stroke-dasharray="5 4"/></svg>modulation and control</span>
@@ -239,11 +239,11 @@ function rbConvert(root = document.body) {
     { id: 'buf',  title: 'DISC RING BUFFER', lines: ['every input sample written here', 'holds four turns at 33⅓ rpm'] },
     { id: 'read', title: 'READ HEAD', lines: ['delay = 12 ms + wow + drift + flutter', '+ warp + jump offset · Hermite'] },
     { id: 'mono', title: 'MONO / WIDTH', lines: ['1920s–50s summed to mono', '1960s 85 % width · 1970s full'], chips: ['ERA'] },
-    { id: 'sum',  sum: true },
-    { id: 'eq',   title: 'ERA PLAYBACK EQ', lines: ['2-pole high-pass → 4-pole low-pass', '→ two resonances (the 1920s horn)', '8 ms fade out / in on a change'], chips: ['ERA', 'DISC'] },
-    { id: 'warp', title: 'WARP LIFT', lines: ['treble loss + up to −2.5 dB', 'at the warp’s high spot'], chips: ['WARP'], theta: true },
-    { id: 'sat',  title: 'SATURATION', lines: ['(1−d)·x + d·tanh(1.5x)/1.5', 'd from 0.35 (1920s) to 0.08 (1970s)'], chips: ['ERA'] },
+    { id: 'eq',   title: 'RECORDING EQ', lines: ['the music only: cut into the groove', '2-pole high-pass → 4-pole low-pass', '→ two resonances (the 1920s horn)'], chips: ['ERA', 'DISC'] },
+    { id: 'sat',  title: 'LATHE SATURATION', lines: ['(1−d)·x + d·tanh(1.5x)/1.5', 'd from 0.35 (1920s) to 0.08 (1970s)'], chips: ['ERA'] },
     { id: 'make', title: 'MAKE-UP GAIN', lines: ['the EQ’s lost level put back', '(−3 to +9 dB)'] },
+    { id: 'sum',  sum: true },
+    { id: 'warp', title: 'WARP LIFT', lines: ['the stylus lifting: treble loss and', 'up to −2.5 dB, music and surface', '8 ms fade on an era or player change'], chips: ['WARP'], theta: true },
     { id: 'mix',  title: 'MIX', lines: ['dry ↔ wet'], chips: ['MIX'] },
     { id: 'out',  title: 'OUTPUT', lines: ['−12 to +12 dB'], chips: ['OUTPUT'] },
     { id: 'byp',  title: 'BYPASS', lines: ['crossfade to the dry tap · latency holds'], chips: ['HOST'] },
@@ -265,10 +265,11 @@ function rbConvert(root = document.body) {
   const panel = box({ x: LX, y: jumps.bottom + 40, w: LW, title: 'TO THE PANEL', lines: ['hidden outputs, every block:', 'disc angle → turntable screen', 'skipping → SKIP lamp'], dashed: true, stroke: C.amber, fill: '#151515' });
 
   // ---- the right column: the record's surface --------------------------------
-  const hiss = box({ x: RX, y: N.mono.y - 10, w: RW, title: 'SURFACE HISS', lines: ['shellac: a 2.5 kHz roar', 'vinyl: soft and dark'], chips: ['DUST'], theta: true });
+  const hiss = box({ x: RX, y: N.mono.y - 44, w: RW, title: 'SURFACE HISS', lines: ['shellac: a 2.5 kHz roar', 'vinyl: soft and dark'], chips: ['DUST'], theta: true });
   const rumble = box({ x: RX, y: hiss.bottom + 12, w: RW, title: 'RUMBLE', lines: ['25 Hz low-passed noise'], chips: ['DUST'] });
   const crackle = box({ x: RX, y: rumble.bottom + 12, w: RW, title: 'CRACKLE', lines: ['ticks and 10 % pops', 'rate rises with dust²'], chips: ['DUST'] });
   const ticks = box({ x: RX, y: crackle.bottom + 12, w: RW, title: 'SCRATCH TICKS', lines: ['one per scratch per turn', '+ a thump when the needle lands'], chips: ['SCRATCHES'], theta: true });
+  const player = box({ x: RX, y: ticks.bottom + 34, w: RW, title: 'PLAYER EQ', lines: ['the surface only, through the pickup:', 'Period: the era’s band again (dull)', 'Modern: 20 Hz – 20 kHz (bright, crisp)'], chips: ['PLAYER', 'ERA'] });
 
   // ---- the dry tap: drawn first, so the lines that cross it sit on top -------
   const dryY = (motor.bottom + mods.y) / 2;
@@ -283,9 +284,12 @@ function rbConvert(root = document.body) {
   const order = ['in', 'buf', 'read', 'mono'];
   for (let i = 0; i + 1 < order.length; i++)
     path([[N[order[i]].cx, N[order[i]].bottom], [N[order[i + 1]].cx, N[order[i + 1]].y]], 'audio');
-  path([[N.mono.cx, N.mono.bottom], [N.sum.cx, N.sum.cy - N.sum.r]], 'audio');
-  path([[N.sum.cx, N.sum.cy + N.sum.r], [N.eq.cx, N.eq.y]], 'audio');
-  const rest = ['eq', 'warp', 'sat', 'make', 'mix', 'out', 'byp', 'end'];
+  path([[N.mono.cx, N.mono.bottom], [N.eq.cx, N.eq.y]], 'audio');
+  path([[N.eq.cx, N.eq.bottom], [N.sat.cx, N.sat.y]], 'audio');
+  path([[N.sat.cx, N.sat.bottom], [N.make.cx, N.make.y]], 'audio');
+  path([[N.make.cx, N.make.bottom], [N.sum.cx, N.sum.cy - N.sum.r]], 'audio');
+  path([[N.sum.cx, N.sum.cy + N.sum.r], [N.warp.cx, N.warp.y]], 'audio');
+  const rest = ['warp', 'mix', 'out', 'byp', 'end'];
   for (let i = 0; i + 1 < rest.length; i++)
     path([[N[rest[i]].cx, N[rest[i]].bottom], [N[rest[i + 1]].cx, N[rest[i + 1]].y]], 'audio');
 
@@ -296,18 +300,18 @@ function rbConvert(root = document.body) {
   path([[jumps.cx, jumps.bottom], [jumps.cx, panel.y]], 'mod');
   label(jumps.cx + 8, (jumps.bottom + panel.y) / 2 + 4, 'disc angle · skipping', C.amber);
 
-  // ---- the surface onto the sum -------------------------------------------------
+  // ---- the surface, through the player, onto the sum -------------------------------
   const BUS = RX - 34;
   const surface = [hiss, rumble, crackle, ticks];
   surface.forEach(n => path([[n.x, n.cy], [BUS, n.cy]], 'audio', false));
-  const busTop = Math.min(hiss.cy, N.sum.cy), busBottom = Math.max(ticks.cy, N.sum.cy);
-  path([[BUS, busTop], [BUS, busBottom]], 'audio', false);
-  path([[BUS, N.sum.cy], [N.sum.cx + N.sum.r, N.sum.cy]], 'audio');
-  label(BUS - 6, N.sum.cy - 8, 'the surface', C.soft, 'end');
+  path([[BUS, hiss.cy], [BUS, ticks.cy]], 'audio', false);
+  path([[BUS, ticks.cy], [BUS, player.cy], [player.x, player.cy]], 'audio');
+  path([[player.cx, player.bottom], [player.cx, N.sum.cy], [N.sum.cx + N.sum.r, N.sum.cy]], 'audio');
+  label(player.cx - 8, N.sum.cy - 8, 'the surface', C.soft, 'end');
 
   // ---- the boxes, over the lines ----------------------------------------------------
   Object.values(N).forEach(n => { if (n.title) drawBox(n); });
-  [motor, mods, jumps, panel, hiss, rumble, crackle, ticks].forEach(drawBox);
+  [motor, mods, jumps, panel, hiss, rumble, crackle, ticks, player].forEach(drawBox);
   svg += `<circle cx="${N.sum.cx}" cy="${N.sum.cy}" r="${N.sum.r}" fill="${C.box}" stroke="${C.ink}" stroke-width="1.6"/>`;
   svg += `<path d="M${N.sum.cx - 7},${N.sum.cy} L${N.sum.cx + 7},${N.sum.cy} M${N.sum.cx},${N.sum.cy - 7} L${N.sum.cx},${N.sum.cy + 7}" stroke="${C.ink}" stroke-width="2"/>`;
 

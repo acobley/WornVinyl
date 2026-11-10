@@ -159,6 +159,7 @@ void WornVinylProcessor::pushParameters ()
 	mDsp.setEra (static_cast<int> (kParams[kEra].toInternal (p[kEra])));
 	mDsp.setDisc (static_cast<int> (kParams[kDisc].toInternal (p[kDisc])));
 	mDsp.setSpeed (static_cast<int> (kParams[kSpeed].toInternal (p[kSpeed])));
+	mDsp.setPlayer (static_cast<int> (kParams[kPlayer].toInternal (p[kPlayer])));
 	mDsp.setScratchesPct (plainValue (p, kScratches));
 	mDsp.setDustPct (plainValue (p, kDust));
 	mDsp.setWowPct (plainValue (p, kWow));
@@ -312,6 +313,8 @@ uint32 PLUGIN_API WornVinylProcessor::getTailSamples ()
 //     double  normalised value of each SETTING, ids 0 .. kNumStoredParams-1
 //     int32   bypass
 //     int32   speed index (kSpeed, appended 10 Nov 2026; absent = Auto)
+//     int32   player index (kPlayer, appended 10 Nov 2026; absent = Period,
+//             which is how the plug-in sounded before it existed)
 //
 // A setting appended later goes AFTER these, read as "absent" (and so its
 // default) by a short stream - no version bump, so an older build still
@@ -352,6 +355,9 @@ tresult PLUGIN_API WornVinylProcessor::setState (IBStream* state)
 	int32 speed = 0;
 	if (streamer.readInt32 (speed) && speed >= 0 && speed < kSpeedCount)
 		loaded[kSpeed] = kParams[kSpeed].toNormalized (speed);
+	int32 player = 0;
+	if (streamer.readInt32 (player) && player >= 0 && player < kPlayerCount)
+		loaded[kPlayer] = kParams[kPlayer].toNormalized (player);
 
 	// Handed to the audio thread, which applies it at the top of the next
 	// process() - the DSP is never touched from here. (Two loads faster
@@ -387,6 +393,7 @@ tresult PLUGIN_API WornVinylProcessor::getState (IBStream* state)
 		streamer.writeDouble (source[id]);
 	streamer.writeInt32 ((mStatePending.load () ? mPendingBypass : mBypass) ? 1 : 0);
 	streamer.writeInt32 (static_cast<int32> (kParams[kSpeed].toInternal (source[kSpeed])));
+	streamer.writeInt32 (static_cast<int32> (kParams[kPlayer].toInternal (source[kPlayer])));
 	return kResultOk;
 }
 

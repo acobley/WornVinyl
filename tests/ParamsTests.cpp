@@ -57,11 +57,14 @@ int main ()
 	CHECK (int (Layout::kTagEra) == int (kEra) && int (Layout::kTagDisc) == int (kDisc) && int (Layout::kTagScratches) == int (kScratches) &&
 	       int (Layout::kTagDust) == int (kDust) && int (Layout::kTagWow) == int (kWow) && int (Layout::kTagFlutter) == int (kFlutter) &&
 	       int (Layout::kTagWarp) == int (kWarp) && int (Layout::kTagJumps) == int (kJumps) && int (Layout::kTagMix) == int (kMix) &&
-	       int (Layout::kTagOutput) == int (kOutput) && int (Layout::kTagSpeed) == int (kSpeed),
+	       int (Layout::kTagOutput) == int (kOutput) && int (Layout::kTagSpeed) == int (kSpeed) && int (Layout::kTagPlayer) == int (kPlayer),
 	       "the layout's tags are the parameter ids");
 	CHECK (static_cast<int> (kParams[kSpeed].toInternal (kParams[kSpeed].defaultNormalized ())) == kSpeedAuto,
 	       "Speed defaults to Auto, so a project saved before it existed sounds the same");
 	CHECK (isLateSetting (kSpeed) && kSpeed >= kNumStoredParams, "Speed is saved after the bypass");
+	CHECK (static_cast<int> (kParams[kPlayer].toInternal (kParams[kPlayer].defaultNormalized ())) == kPlayerPeriod,
+	       "Player defaults to Period - how older projects sounded");
+	CHECK (isLateSetting (kPlayer) && kPlayer > kSpeed, "Player is saved after Speed");
 	for (const auto& c : Layout::kControls)
 		CHECK (! isOutputParam (static_cast<Steinberg::Vst::ParamID> (c.tag)), "no control writes an output");
 

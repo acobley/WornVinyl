@@ -188,12 +188,13 @@ void WornVinylEditor::refresh ()
 	const int era = choice (kEra);
 	const int disc = choice (kDisc);
 	const int speed = choice (kSpeed);
+	const int player = choice (kPlayer);
 
 	// The Disc switch: the era decides, except in the 1950s.
 	if (mDiscSwitch)
 		mDiscSwitch->setLocked (discLocked (era) ? effectiveDisc (era, disc) : -1);
 
-	mHeaderLine->setText (Layout::headerLineText (era, disc, speed));
+	mHeaderLine->setText (Layout::headerLineText (era, disc, speed, player));
 	mDiscNote->setText (Layout::discNoteText (era));
 	mTurntableLine->setText (Layout::turntableLineText (era, disc, plain (kScratches), plain (kDust)));
 	mSpeedLine->setText (Layout::speedLineText (era, disc, speed));

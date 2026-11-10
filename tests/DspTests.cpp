@@ -406,6 +406,71 @@ static void testSpeed ()
 }
 
 //------------------------------------------------------------------------
+static void testPlayer ()
+{
+	std::printf ("player: the music the same, the surface Period-dull or Modern-bright\n");
+	const double fs = 48000;
+
+	// The music alone (no surface): Period and Modern bit-identical.
+	auto in = sine (fs, 700, 2.0, 0.3);
+	std::vector<float> l1, r1, l2, r2;
+	for (int e : { kEra1920, kEra1970 })
+	{
+		Dsp a, b;
+		for (Dsp* d : { &a, &b })
+		{
+			d->setSampleRate (fs);
+			d->setEra (e);
+			clean (*d);
+		}
+		a.setPlayer (kPlayerPeriod); b.setPlayer (kPlayerModern);
+		a.snapParameters (); b.snapParameters ();
+		run (a, in, in, l1, r1);
+		run (b, in, in, l2, r2);
+		CHECK (l1 == l2 && r1 == r2, "%s: without a surface the player changes nothing", eraName (e));
+	}
+
+	// The surface alone: its treble (first difference, ~above 5 kHz).
+	auto treble = [] (const std::vector<float>& x) {
+		double s = 0;
+		for (size_t i = 1; i < x.size (); ++i) { const double d = double (x[i]) - x[i - 1]; s += d * d; }
+		return 10.0 * std::log10 (s / x.size () + 1e-30);
+	};
+	std::vector<float> silence (static_cast<size_t> (fs * 4), 0.0f);
+	auto surface = [&] (int era, int player) {
+		Dsp d;
+		d.setSampleRate (fs);
+		d.setEra (era);
+		d.setPlayer (player);
+		d.setDustPct (60); d.setScratchesPct (40);
+		d.snapParameters ();
+		std::vector<float> l, r;
+		run (d, silence, silence, l, r);
+		return treble (l);
+	};
+	const double p20 = surface (kEra1920, kPlayerPeriod), m20 = surface (kEra1920, kPlayerModern);
+	const double p70 = surface (kEra1970, kPlayerPeriod), m70 = surface (kEra1970, kPlayerModern);
+	std::printf ("  surface treble: 1920s period %.1f, modern %.1f dB  |  1970s period %.1f, modern %.1f dB\n",
+	             p20, m20, p70, m70);
+	CHECK (m20 - p20 > 6.0, "a 78 on a modern deck crackles far brighter (%.1f dB)", m20 - p20);
+	CHECK (std::fabs (m70 - p70) < 3.0, "negative control: a 1970s LP's own band is nearly modern (%.1f dB)", m70 - p70);
+
+	// Switching the player fades rather than clicks.
+	Dsp d;
+	d.setSampleRate (fs);
+	clean (d);
+	auto s = sine (fs, 200, 0.5, 0.5);
+	std::vector<float> l, r;
+	run (d, s, s, l, r);
+	d.setPlayer (kPlayerModern);
+	run (d, s, s, l, r);
+	double step = 0;
+	for (size_t i = 1; i < l.size (); ++i)
+		step = std::max (step, std::fabs (double (l[i]) - l[i - 1]));
+	CHECK (step < 0.5 * 2 * kPi * 200 / fs * 1.5, "a player change: biggest step %.4f", step);
+}
+
+//------------------------------------------------------------------------
 static void testMonoAndDeterminism ()
 {
 	std::printf ("mono eras, determinism\n");
@@ -518,6 +583,7 @@ int main ()
 	testPitch ();
 	testJumps ();
 	testSpeed ();
+	testPlayer ();
 	testMonoAndDeterminism ();
 	testSmoothingAndEdges ();
 	testCost ();

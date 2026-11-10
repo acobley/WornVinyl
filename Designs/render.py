@@ -4,7 +4,7 @@ d = pathlib.Path(__file__).parent
 with sync_playwright() as p:
     b = p.chromium.launch()
     for name in sys.argv[1:]:
-        pg = b.new_page(device_scale_factor=2, viewport={"width": 1000, "height": 480})
+        pg = b.new_page(device_scale_factor=2, viewport={"width": 1000, "height": 520})
         pg.goto((d / f"{name}.html").as_uri()); pg.wait_for_timeout(300)
         w, h = pg.evaluate("[document.body.scrollWidth, document.body.offsetHeight]")
         pg.set_viewport_size({"width": w, "height": h})

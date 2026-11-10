@@ -49,6 +49,18 @@ const char* discName (int disc)
 	return disc == kDiscShellac ? "Shellac" : (disc == kDiscVinyl ? "Vinyl" : "");
 }
 
+const char* playerName (int player)
+{
+	return player == kPlayerPeriod ? "Period" : (player == kPlayerModern ? "Modern" : "");
+}
+
+const Profile& playerProfile (int era, int disc, int player)
+{
+	// A modern turntable and phono stage: flat but for the edges.
+	static const Profile kModern { 20.0, 20000.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+	return player == kPlayerModern ? kModern : profileOf (era, disc);
+}
+
 const char* speedName (int speed)
 {
 	static const char* const names[kSpeedCount] = { "Auto", "33", "45", "78" };
@@ -292,14 +304,21 @@ void Dsp::designProfile ()
 {
 	mActiveEra = mEra;
 	mActiveDisc = mDisc;
+	mActivePlayer = mPlayer;
 	const int disc = effectiveDisc (mEra, mDisc);
 	const Profile& p = profileOf (mEra, disc);
 
+	// The recording (the music) and the player (the surface).
 	mEqL.design (p, mFs);
 	mEqR.design (p, mFs);
 	mEqL.clear ();
 	mEqR.clear ();
 	mMakeupDb = profileMakeupDb (p);
+	const Profile& player = playerProfile (mEra, disc, mPlayer);
+	mPlayL.design (player, mFs);
+	mPlayR.design (player, mFs);
+	mPlayL.clear ();
+	mPlayR.clear ();
 
 	// Surface noise's colour: shellac roars in the presence band, vinyl
 	// hisses softly and darker.
@@ -364,6 +383,7 @@ void Dsp::reset ()
 	for (auto& g : mGrains)
 		g.live = false;
 	mEqL.clear (); mEqR.clear ();
+	mPlayL.clear (); mPlayR.clear ();
 	mHissShapeL.clear (); mHissShapeR.clear (); mHissShape2L.clear (); mHissShape2R.clear ();
 	mRumbleL.clear (); mRumbleR.clear ();
 	mWarpLpL = mWarpLpR = 0.0;
@@ -384,14 +404,25 @@ void Dsp::setEra (int era)
 {
 	era = std::clamp (era, 0, kEraCount - 1);
 	mEra = era;
-	if (mEra != mActiveEra || effectiveDisc (mEra, mDisc) != effectiveDisc (mActiveEra, mActiveDisc))
-		mProfilePending = true;
+	markIfChanged ();
 }
 
 void Dsp::setDisc (int disc)
 {
 	mDisc = std::clamp (disc, 0, kDiscCount - 1);
-	if (mEra != mActiveEra || effectiveDisc (mEra, mDisc) != effectiveDisc (mActiveEra, mActiveDisc))
+	markIfChanged ();
+}
+
+void Dsp::setPlayer (int player)
+{
+	mPlayer = std::clamp (player, 0, kPlayerCount - 1);
+	markIfChanged ();
+}
+
+void Dsp::markIfChanged ()
+{
+	if (mEra != mActiveEra || effectiveDisc (mEra, mDisc) != effectiveDisc (mActiveEra, mActiveDisc) ||
+	    mPlayer != mActivePlayer)
 		mProfilePending = true;
 }
 
@@ -630,7 +661,23 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 			wR = m - s;
 		}
 
-		// ---- the surface ----------------------------------------------------------
+		// ---- THE RECORDING: the era's band, its horn, the cutting lathe -------
+		// The music only - this was done to it before the disc was pressed.
+		wL = mEqL.process (wL);
+		wR = mEqR.process (wR);
+		{
+			// A gentle saturation, the lathe overloading: unity for small
+			// signals, softer at the top.
+			const double dr = prof.drive;
+			wL = (1.0 - dr) * wL + dr * std::tanh (1.5 * wL) / 1.5;
+			wR = (1.0 - dr) * wR + dr * std::tanh (1.5 * wR) / 1.5;
+			const double makeup = dbToGain (mMakeupDb);
+			wL *= makeup;
+			wR *= makeup;
+		}
+
+		// ---- the surface: what the stylus meets in the groove ------------------
+		double sL = 0.0, sR = 0.0;
 		if (dust > 0.0)
 		{
 			const double swish = 1.0 + 0.2 * std::sin (kTwoPi * mTheta);
@@ -644,8 +691,8 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 			const double r0 = mRumbleL.process (bipolar ());
 			const double r1 = stereo ? mRumbleR.process (bipolar ()) : r0;
 
-			wL += hiss * hL + rum * r0;
-			wR += hiss * hR + rum * r1;
+			sL += hiss * hL + rum * r0;
+			sR += hiss * hR + rum * r1;
 
 			if (uniform () < crackleRate (era, disc, dust * 100.0) / mFs)
 			{
@@ -664,8 +711,8 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 			if (! g.live)
 				continue;
 			const double v = g.noiseAmp * bipolar () + g.ringAmp * g.s;
-			wL += v * g.gainL;
-			wR += v * g.gainR;
+			sL += v * g.gainL;
+			sR += v * g.gainR;
 			g.noiseAmp *= g.noiseDecay;
 			g.ringAmp *= g.ringDecay;
 			const double c = g.c * g.cosw - g.s * g.sinw;
@@ -675,9 +722,14 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 				g.live = false;
 		}
 
-		// ---- the playback chain ----------------------------------------------------
-		wL = mEqL.process (wL);
-		wR = mEqR.process (wR);
+		// ---- THE PLAYER: the surface through the pickup -------------------------
+		// The music's colour is already in the groove; what the PLAYER adds
+		// shows on the surface. Period: a player as old as the disc, the
+		// era's band again, so the crackle is as dull as the music. Modern:
+		// a good turntable today, wide open, so it crackles bright and crisp
+		// over the old sound - the sound of most transfers of old 78s.
+		wL += mPlayL.process (sL);
+		wR += mPlayR.process (sR);
 
 		// The warp's high spot: the stylus lifts, the top end goes and the
 		// level dips. Exactly nothing when there is no warp.
@@ -696,16 +748,9 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 			mWarpLpR = wR;
 		}
 
-		// A gentle saturation: unity for small signals, softer at the top.
-		{
-			const double dr = prof.drive;
-			wL = (1.0 - dr) * wL + dr * std::tanh (1.5 * wL) / 1.5;
-			wR = (1.0 - dr) * wR + dr * std::tanh (1.5 * wR) / 1.5;
-		}
-
-		const double makeup = dbToGain (mMakeupDb) * mProfileGain;
-		wL *= makeup;
-		wR *= makeup;
+		// An era or player change: the wet fades out, the chain swaps, in.
+		wL *= mProfileGain;
+		wR *= mProfileGain;
 
 		// ---- dry, mix, output, bypass ---------------------------------------------
 		const double dL = mBufL[(mWrite - static_cast<uint32_t> (mBaseDelay)) & mMask];
