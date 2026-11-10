@@ -1,0 +1,339 @@
+<title>Worn Vinyl Signal Flow</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap">
+<style>
+/* Layout: one tall signal-flow drawing down the middle (the audio spine),
+   modulation sources on its left, the record's surface on its right,
+   the dry tap running down the far left - drawn on the plug-in's own
+   black panel. A single dark look, by choice: it is the panel. */
+:root {
+  --ground: #121212;
+  --box: #171717;
+  --edge: #d9d6cc;
+  --ink: #f4f1e8;
+  --soft: #aeaba3;
+  --dim: #77746d;
+  --amber: #ffb02e;
+  --red: #e2342b;
+  --font-body: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html { background: var(--ground); }
+body {
+  background: var(--ground); color: var(--ink);
+  font: 15px/1.5 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+}
+.page { max-width: 1000px; margin: 0 auto; display: grid; gap: 22px; }
+header { display: grid; gap: 10px; border-bottom: 2px solid var(--edge); padding-bottom: 18px; }
+.wordmark svg { display: block; max-width: 100%; height: auto; }
+.lede { color: var(--soft); max-width: 68ch; margin: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13px; color: var(--soft); align-items: center; }
+.legend span { display: inline-flex; gap: 8px; align-items: center; }
+.legend svg { flex: none; }
+.diagram { overflow-x: auto; border: 1.2px solid var(--edge); border-radius: 2px; background: #151515; }
+.diagram svg { display: block; width: 100%; min-width: 820px; height: auto; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.note { border: 1.2px solid var(--edge); border-radius: 2px; padding: 14px 16px; background: var(--box); min-width: 0; }
+.note h2 { margin: 0 0 6px; font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; text-wrap: balance; }
+.note p { margin: 0; color: var(--soft); font-size: 14px; }
+.note code, .mono { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink); }
+</style>
+
+<div class="page">
+  <header>
+    <div class="wordmark" id="wordmark" aria-label="Worn Vinyl signal flow"></div>
+    <p class="lede">How audio moves through the plug-in, from the stereo input to the stereo output. The music is written onto a turning “disc”, read back with the record’s faults, put through the decade’s playback chain, then mixed with the dry signal.</p>
+    <div class="legend" aria-label="Legend">
+      <span><svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#f4f1e8" stroke-width="2"/></svg>audio</span>
+      <span><svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#ffb02e" stroke-width="1.6" stroke-dasharray="5 4"/></svg>modulation and control</span>
+      <span><svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#8a877f" stroke-width="1.6" stroke-dasharray="2 4"/></svg>dry tap (fixed 12 ms)</span>
+      <span><svg width="22" height="22"><circle cx="11" cy="11" r="9" fill="#151515" stroke="#ffb02e" stroke-width="1.3"/><text x="11" y="15.5" text-anchor="middle" font-size="12" fill="#ffb02e" font-family="IBM Plex Mono">θ</text></svg>follows the disc’s turn</span>
+      <span><svg width="44" height="18"><rect x="1" y="1" width="42" height="16" rx="2" fill="none" stroke="#d9d6cc"/><text x="22" y="13" text-anchor="middle" font-size="10" fill="#f4f1e8" font-family="IBM Plex Sans Condensed" font-weight="600">DUST</text></svg>panel control</span>
+    </div>
+  </header>
+
+  <div class="diagram"><svg id="flow" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Worn Vinyl signal flow diagram"></svg></div>
+
+  <section class="notes">
+    <div class="note"><h2>Latency</h2><p>The read head rests 12 ms behind the write head, so wow, flutter and warp can bend the pitch both ways. The plug-in reports it (<span class="mono">576</span> samples at 48 kHz) and the host compensates. Dry, Mix and Bypass use the same 12 ms, so nothing phases or jumps.</p></div>
+    <div class="note"><h2>Jumps</h2><p>Not compensated, on purpose. A stuck needle replays the last turn one to four times, then skips forward to where the song is now, so the output always returns to sync. Turn JUMPS off for no timing changes at all.</p></div>
+    <div class="note"><h2>Speed</h2><p>The motor’s rpm (Auto, 33, 45 or 78) sets how often the faults come round: scratch ticks, wow, the warp, a stuck groove’s length. The music keeps its own pitch and tempo.</p></div>
+  </section>
+</div>
+
+<script>
+
+// A hand-drawn stroke face: 70s sci-fi lettering. Heavy, wide,
+// rounded-square capitals and figures; every letter is drawn on a 4 x 6 grid
+// (y down) and stroked with round joins. Drawn from scratch, so there is no
+// font file or font licence involved.
+const RB = {
+  A: [4, 'M0,6 L0,2 Q0,0 2,0 Q4,0 4,2 L4,6 M0,3.6 L4,3.6'],
+  B: [4, 'M0,0 L2.8,0 Q4,0 4,1.5 Q4,3 2.8,3 L0,3 M2.8,3 Q4,3 4,4.5 Q4,6 2.8,6 L0,6 L0,0'],
+  C: [4, 'M4,0 L1.6,0 Q0,0 0,1.6 L0,4.4 Q0,6 1.6,6 L4,6'],
+  D: [4, 'M0,0 L2,0 Q4,0 4,2 L4,4 Q4,6 2,6 L0,6 Z'],
+  E: [4, 'M4,0 L0,0 L0,6 L4,6 M0,3 L3.2,3'],
+  F: [4, 'M4,0 L0,0 L0,6 M0,3 L3.2,3'],
+  G: [4, 'M4,0 L1.6,0 Q0,0 0,1.6 L0,4.4 Q0,6 1.6,6 L4,6 L4,3.2 L2.2,3.2'],
+  H: [4, 'M0,0 L0,6 M4,0 L4,6 M0,3 L4,3'],
+  I: [0, 'M0,0 L0,6'],
+  J: [4, 'M4,0 L4,4.4 Q4,6 2.4,6 L0,6'],
+  K: [4, 'M0,0 L0,6 M0,3 L1.8,3 L4,0 M1.8,3 L4,6'],
+  L: [4, 'M0,0 L0,6 L4,6'],
+  M: [5, 'M0,6 L0,1.4 Q0,0 1.25,0 Q2.5,0 2.5,1.4 L2.5,4.2 M2.5,1.4 Q2.5,0 3.75,0 Q5,0 5,1.4 L5,6'],
+  N: [4, 'M0,6 L0,0 L4,6 L4,0'],
+  O: [4, 'M1.6,0 L2.4,0 Q4,0 4,1.6 L4,4.4 Q4,6 2.4,6 L1.6,6 Q0,6 0,4.4 L0,1.6 Q0,0 1.6,0 Z'],
+  P: [4, 'M0,6 L0,0 L2.8,0 Q4,0 4,1.5 Q4,3 2.8,3 L0,3'],
+  Q: [4, 'M1.6,0 L2.4,0 Q4,0 4,1.6 L4,4.4 Q4,6 2.4,6 L1.6,6 Q0,6 0,4.4 L0,1.6 Q0,0 1.6,0 Z M2.6,4.4 L4.3,6.2'],
+  R: [4, 'M0,6 L0,0 L2.8,0 Q4,0 4,1.5 Q4,3 2.8,3 L0,3 M2.4,3 L4,6'],
+  S: [4, 'M4,0 L1.4,0 Q0,0 0,1.5 Q0,3 1.5,3 L2.5,3 Q4,3 4,4.5 Q4,6 2.6,6 L0,6'],
+  T: [4, 'M0,0 L4,0 M2,0 L2,6'],
+  U: [4, 'M0,0 L0,4 Q0,6 2,6 Q4,6 4,4 L4,0'],
+  V: [4, 'M0,0 L0,3.4 L2,6 L4,3.4 L4,0'],
+  W: [5, 'M0,0 L0,4.6 Q0,6 1.25,6 Q2.5,6 2.5,4.6 L2.5,1.8 M2.5,4.6 Q2.5,6 3.75,6 Q5,6 5,4.6 L5,0'],
+  X: [4, 'M0,0 L4,6 M4,0 L0,6'],
+  Y: [4, 'M0,0 L0,1.4 Q0,3 2,3 Q4,3 4,1.4 L4,0 M2,3 L2,6'],
+  Z: [4, 'M0,0 L4,0 L0,6 L4,6'],
+  0: [4, 'M1.6,0 L2.4,0 Q4,0 4,1.6 L4,4.4 Q4,6 2.4,6 L1.6,6 Q0,6 0,4.4 L0,1.6 Q0,0 1.6,0 Z'],
+  1: [1.2, 'M0,1 L1.2,0 L1.2,6'],
+  2: [4, 'M0,0 L2.5,0 Q4,0 4,1.5 Q4,3 2.5,3 L1.5,3 Q0,3 0,4.5 L0,6 L4,6'],
+  3: [4, 'M0,0 L2.8,0 Q4,0 4,1.5 Q4,3 2.8,3 L1.2,3 M2.8,3 Q4,3 4,4.5 Q4,6 2.8,6 L0,6'],
+  4: [4, 'M3,6 L3,0 L0,4 L4,4'],
+  5: [4, 'M4,0 L0,0 L0,3 L2.5,3 Q4,3 4,4.5 Q4,6 2.5,6 L0,6'],
+  6: [4, 'M3.6,0 L1.6,0 Q0,0 0,1.6 L0,4.5 Q0,6 1.5,6 L2.5,6 Q4,6 4,4.5 Q4,3 2.5,3 L0,3'],
+  7: [4, 'M0,0 L4,0 L1.6,6'],
+  8: [4, 'M1.5,3 Q0,3 0,1.5 Q0,0 1.5,0 L2.5,0 Q4,0 4,1.5 Q4,3 2.5,3 Z M1.5,3 L2.5,3 Q4,3 4,4.5 Q4,6 2.5,6 L1.5,6 Q0,6 0,4.5 Q0,3 1.5,3'],
+  9: [4, 'M0.4,6 L2.4,6 Q4,6 4,4.4 L4,1.5 Q4,0 2.5,0 L1.5,0 Q0,0 0,1.5 Q0,3 1.5,3 L4,3'],
+  '.': [0, 'M0,6 L0,6.01'], ',': [0, 'M0,6 L-0.4,7'], ':': [0, 'M0,2 L0,2.01 M0,5.5 L0,5.51'],
+  '·': [0, 'M0,3 L0,3.01'], '•': [0, 'M0,3 L0,3.01'], '●': [1.6, 'M0.8,3 L0.8,3.01'],
+  '%': [4, 'M0,0 L1.1,0 L1.1,1.3 L0,1.3 Z M4,0 L0,6 M2.9,4.7 L4,4.7 L4,6 L2.9,6 Z'],
+  '-': [3, 'M0,3 L3,3'], '−': [3, 'M0,3 L3,3'], '–': [3, 'M0,3 L3,3'], '—': [4, 'M0,3 L4,3'],
+  '+': [3, 'M0,3 L3,3 M1.5,1.5 L1.5,4.5'], '×': [3, 'M0,1.6 L3,4.6 M3,1.6 L0,4.6'],
+  '/': [3, 'M0,6 L3,0'], '=': [3, 'M0,2 L3,2 M0,4 L3,4'],
+  '→': [4.4, 'M0,3 L4.4,3 M2.8,1.4 L4.4,3 L2.8,4.6'], '↓': [3, 'M1.5,0 L1.5,6 M0,4.5 L1.5,6 L3,4.5'],
+  '‹': [2.2, 'M2.2,1 L0,3 L2.2,5'], '›': [2.2, 'M0,1 L2.2,3 L0,5'], '⌄': [3.4, 'M0,2.4 L1.7,4 L3.4,2.4'],
+  '┆': [0, 'M0,0 L0,1.4 M0,2.3 L0,3.7 M0,4.6 L0,6'], "'": [0, 'M0,0 L0,1.6'], '(': [1.2, 'M1.2,0 Q0,1 0,3 Q0,5 1.2,6'], ')': [1.2, 'M0,0 Q1.2,1 1.2,3 Q1.2,5 0,6'],
+};
+const RB_SPACE = 2.6;
+
+// One string as paths. cap = cap height in px; w = stroke in grid units.
+function rbPaths(str, cap, w, track) {
+  const s = cap / 6; let x = 0, d = [];
+  for (const ch of str.toUpperCase()) {
+    if (ch === ' ') { x += RB_SPACE; continue; }
+    const g = RB[ch] || RB['·'];
+    d.push(`<path transform="translate(${(x + w / 2) * s},${w / 2 * s}) scale(${s})" d="${g[1]}"/>`);
+    x += g[0] + w + track;
+  }
+  return { paths: d.join(''), width: Math.max(0, (x - track)) * s, height: cap + w * s };
+}
+function rbSvg(str, cap, color, w = 1.0, track = 1.05) {
+  const p = rbPaths(str, cap, w, track);
+  return `<svg class="rb" width="${p.width.toFixed(1)}" height="${p.height.toFixed(1)}" style="overflow:visible;vertical-align:${(-w * cap / 12).toFixed(1)}px" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${p.paths}</svg>`;
+}
+
+// Replace every HTML text node and SVG <text> in the page with the face.
+function rbConvert(root = document.body) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) {
+    const n = walker.currentNode;
+    if (!n.nodeValue.trim()) continue;
+    if (n.parentElement.closest('script,style,svg')) continue;
+    nodes.push(n);
+  }
+  nodes.forEach(n => {
+    const el = n.parentElement, cs = getComputedStyle(el);
+    const fs = parseFloat(cs.fontSize), bold = parseInt(cs.fontWeight) >= 600;
+    const cap = fs * (el.dataset.rbcap ? +el.dataset.rbcap : 0.64);
+    const w = bold ? 1.25 : 0.95;
+    const raw = n.nodeValue.replace(/\s+/g, ' ');
+    const words = raw.trim().split(' ');
+    const span = document.createElement('rb-t');
+    const lead = raw.startsWith(' ') ? ' ' : '', tail = raw.endsWith(' ') ? ' ' : '';
+    const sp = `<rb-s style="display:inline-block;width:${(cap / 6 * 4.4).toFixed(1)}px"></rb-s>`;
+    span.innerHTML = lead + (words.length > 4
+      ? words.map(wd => `<rb-w style="white-space:nowrap">${rbSvg(wd, cap, cs.color, w)}</rb-w>`).join(`<rb-s style="display:inline-block;width:${(cap / 6 * 2.4).toFixed(1)}px"></rb-s> `)
+      : `<rb-w style="white-space:nowrap">${words.map(wd => rbSvg(wd, cap, cs.color, w)).join(sp)}</rb-w>`) + tail;
+    n.replaceWith(span);
+  });
+  document.querySelectorAll('svg text').forEach(t => {
+    const fs = parseFloat(t.getAttribute('font-size') || 10), bold = (t.getAttribute('font-weight') || '400') >= 600;
+    const cap = fs * 0.64, w = bold ? 1.25 : 0.95;
+    const p = rbPaths(t.textContent, cap, w, 1.05);
+    const x = +(t.getAttribute('x') || 0), y = +(t.getAttribute('y') || 0);
+    const anchor = t.getAttribute('text-anchor');
+    const dx = anchor === 'end' ? -p.width : anchor === 'middle' ? -p.width / 2 : 0;
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    if (t.getAttribute('transform')) g.setAttribute('transform', t.getAttribute('transform'));
+    g.innerHTML = `<g transform="translate(${x + dx},${y - cap})" fill="none" stroke="${t.getAttribute('fill')}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${p.paths}</g>`;
+    t.replaceWith(g);
+  });
+}
+
+</script>
+<script>
+(function () {
+  const C = { ink: '#f4f1e8', soft: '#aeaba3', dim: '#8a877f', edge: '#d9d6cc', box: '#1b1b1b', amber: '#ffb02e', bg: '#151515' };
+  const W = 960, CX = 370, CW = 260, LX = 60, LW = 250, RX = 690, RW = 250, DRY = 28;
+  let svg = '';
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+  function heightOf(n) { return 26 + 15 * n.lines.length + (n.chips && n.chips.length ? 26 : 0) + 6; }
+  function box(n) {
+    n.h = n.h || heightOf(n);
+    n.cy = n.y + n.h / 2; n.cx = n.x + n.w / 2; n.bottom = n.y + n.h; n.right = n.x + n.w;
+    return n;
+  }
+  function drawBox(n) {
+    const dash = n.dashed ? ' stroke-dasharray="4 4"' : '';
+    svg += `<rect x="${n.x + .5}" y="${n.y + .5}" width="${n.w - 1}" height="${n.h - 1}" rx="2" fill="${n.fill || C.box}" stroke="${n.stroke || C.edge}" stroke-width="1.2"${dash}/>`;
+    svg += `<text x="${n.x + 12}" y="${n.y + 20}" font-family="IBM Plex Sans Condensed, Arial Narrow, sans-serif" font-weight="600" font-size="13" letter-spacing="1" fill="${C.ink}">${esc(n.title)}</text>`;
+    n.lines.forEach((l, i) => {
+      svg += `<text x="${n.x + 12}" y="${n.y + 38 + 15 * i}" font-family="IBM Plex Sans Condensed, Arial Narrow, sans-serif" font-size="12" fill="${C.soft}">${esc(l)}</text>`;
+    });
+    if (n.chips) {
+      let x = n.x + 12;
+      const y = n.y + 26 + 15 * n.lines.length + 4;
+      n.chips.forEach(c => {
+        const w = 12 + c.length * 6.4;
+        svg += `<rect x="${x}" y="${y}" width="${w}" height="17" rx="2" fill="none" stroke="${C.edge}" stroke-width="1"/>`;
+        svg += `<text x="${x + w / 2}" y="${y + 12.5}" text-anchor="middle" font-family="IBM Plex Sans Condensed, Arial Narrow, sans-serif" font-weight="600" font-size="10" letter-spacing=".6" fill="${C.ink}">${c}</text>`;
+        x += w + 6;
+      });
+    }
+    if (n.theta) {
+      svg += `<circle cx="${n.right - 16}" cy="${n.y + 16}" r="9" fill="${C.bg}" stroke="${C.amber}" stroke-width="1.3"/>`;
+      svg += `<text x="${n.right - 16}" y="${n.y + 20.5}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="${C.amber}">θ</text>`;
+    }
+  }
+  const STYLE = {
+    audio: `stroke="${C.ink}" stroke-width="2"`,
+    mod: `stroke="${C.amber}" stroke-width="1.6" stroke-dasharray="5 4"`,
+    dry: `stroke="${C.dim}" stroke-width="1.6" stroke-dasharray="2 4"`,
+  };
+  const HEAD = { audio: C.ink, mod: C.amber, dry: C.dim };
+  function path(pts, kind, arrow = true, halo = false) {
+    const d = 'M' + pts.map(p => p.join(',')).join(' L');
+    if (halo) svg += `<path d="${d}" fill="none" stroke="${C.bg}" stroke-width="7"/>`;
+    svg += `<path d="${d}" fill="none" ${STYLE[kind]} stroke-linejoin="round"/>`;
+    if (arrow) {
+      const [x2, y2] = pts[pts.length - 1], [x1, y1] = pts[pts.length - 2];
+      const a = Math.atan2(y2 - y1, x2 - x1), s = 7;
+      const p1 = [x2 - s * Math.cos(a - .45), y2 - s * Math.sin(a - .45)], p2 = [x2 - s * Math.cos(a + .45), y2 - s * Math.sin(a + .45)];
+      svg += `<path d="M${p1} L${x2},${y2} L${p2} Z" fill="${HEAD[kind]}"/>`;
+    }
+  }
+  function label(x, y, t, col, anchor = 'start') {
+    svg += `<text x="${x}" y="${y}" text-anchor="${anchor}" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="${col}">${esc(t)}</text>`;
+  }
+
+  // ---- the audio spine -------------------------------------------------------
+  const spec = [
+    { id: 'in',   title: 'STEREO IN', lines: ['left + right'] },
+    { id: 'buf',  title: 'DISC RING BUFFER', lines: ['every input sample written here', 'holds four turns at 33⅓ rpm'] },
+    { id: 'read', title: 'READ HEAD', lines: ['delay = 12 ms + wow + drift + flutter', '+ warp + jump offset · Hermite'] },
+    { id: 'mono', title: 'MONO / WIDTH', lines: ['1920s–50s summed to mono', '1960s 85 % width · 1970s full'], chips: ['ERA'] },
+    { id: 'sum',  sum: true },
+    { id: 'eq',   title: 'ERA PLAYBACK EQ', lines: ['2-pole high-pass → 4-pole low-pass', '→ two resonances (the 1920s horn)', '8 ms fade out / in on a change'], chips: ['ERA', 'DISC'] },
+    { id: 'warp', title: 'WARP LIFT', lines: ['treble loss + up to −2.5 dB', 'at the warp’s high spot'], chips: ['WARP'], theta: true },
+    { id: 'sat',  title: 'SATURATION', lines: ['(1−d)·x + d·tanh(1.5x)/1.5', 'd from 0.35 (1920s) to 0.08 (1970s)'], chips: ['ERA'] },
+    { id: 'make', title: 'MAKE-UP GAIN', lines: ['the EQ’s lost level put back', '(−3 to +9 dB)'] },
+    { id: 'mix',  title: 'MIX', lines: ['dry ↔ wet'], chips: ['MIX'] },
+    { id: 'out',  title: 'OUTPUT', lines: ['−12 to +12 dB'], chips: ['OUTPUT'] },
+    { id: 'byp',  title: 'BYPASS', lines: ['crossfade to the dry tap · latency holds'], chips: ['HOST'] },
+    { id: 'end',  title: 'STEREO OUT', lines: ['left + right'] },
+  ];
+  const N = {};
+  let y = 24;
+  spec.forEach(s => {
+    if (s.sum) { N.sum = { cx: CX + CW / 2, cy: y + 18, r: 18 }; y += 36 + 34; return; }
+    N[s.id] = box(Object.assign({ x: CX, y, w: CW }, s));
+    y = N[s.id].bottom + 34;
+  });
+  const H = y + 4;
+
+  // ---- the left column: what moves the read head -----------------------------
+  const motor = box({ x: LX, y: N.buf.y, w: LW, title: 'MOTOR', lines: ['Auto (the disc’s own) / 33⅓ / 45 / 78 rpm', '→ the disc angle θ'], chips: ['ERA', 'DISC', 'SPEED'], theta: true });
+  const mods = box({ x: LX, y: motor.bottom + 40, w: LW, title: 'PITCH MODULATION', lines: ['wow once a turn + 0.13 Hz drift', 'flutter 7.3 + 11.1 Hz', 'warp: one Gaussian bump a turn'], chips: ['WOW', 'FLUTTER', 'WARP'], theta: true });
+  const jumps = box({ x: LX, y: mods.bottom + 26, w: LW, title: 'NEEDLE JUMPS', lines: ['at the deepest scratch, above 60 %', 'back one turn, 1 to 4 times,', 'then skip on to the live point', '6 ms crossfade each time'], chips: ['SCRATCHES', 'JUMPS'], theta: true });
+  const panel = box({ x: LX, y: jumps.bottom + 40, w: LW, title: 'TO THE PANEL', lines: ['hidden outputs, every block:', 'disc angle → turntable screen', 'skipping → SKIP lamp'], dashed: true, stroke: C.amber, fill: '#151515' });
+
+  // ---- the right column: the record's surface --------------------------------
+  const hiss = box({ x: RX, y: N.mono.y - 10, w: RW, title: 'SURFACE HISS', lines: ['shellac: a 2.5 kHz roar', 'vinyl: soft and dark'], chips: ['DUST'], theta: true });
+  const rumble = box({ x: RX, y: hiss.bottom + 12, w: RW, title: 'RUMBLE', lines: ['25 Hz low-passed noise'], chips: ['DUST'] });
+  const crackle = box({ x: RX, y: rumble.bottom + 12, w: RW, title: 'CRACKLE', lines: ['ticks and 10 % pops', 'rate rises with dust²'], chips: ['DUST'] });
+  const ticks = box({ x: RX, y: crackle.bottom + 12, w: RW, title: 'SCRATCH TICKS', lines: ['one per scratch per turn', '+ a thump when the needle lands'], chips: ['SCRATCHES'], theta: true });
+
+  // ---- the dry tap: drawn first, so the lines that cross it sit on top -------
+  const dryY = (motor.bottom + mods.y) / 2;
+  const dryX0 = N.buf.x + 26;
+  path([[dryX0, N.buf.bottom], [dryX0, dryY], [DRY, dryY], [DRY, N.mix.cy], [CX, N.mix.cy]], 'dry');
+  path([[DRY, N.mix.cy], [DRY, N.byp.cy], [CX, N.byp.cy]], 'dry');
+  label(DRY + 8, N.mix.cy - 8, 'dry', C.dim);
+  label(DRY + 8, N.byp.cy - 8, 'dry', C.dim);
+  label(LX + LW - 10, dryY - 7, 'DRY TAP · FIXED 12 MS', C.dim, 'end');
+
+  // ---- audio arrows down the spine --------------------------------------------
+  const order = ['in', 'buf', 'read', 'mono'];
+  for (let i = 0; i + 1 < order.length; i++)
+    path([[N[order[i]].cx, N[order[i]].bottom], [N[order[i + 1]].cx, N[order[i + 1]].y]], 'audio');
+  path([[N.mono.cx, N.mono.bottom], [N.sum.cx, N.sum.cy - N.sum.r]], 'audio');
+  path([[N.sum.cx, N.sum.cy + N.sum.r], [N.eq.cx, N.eq.y]], 'audio');
+  const rest = ['eq', 'warp', 'sat', 'make', 'mix', 'out', 'byp', 'end'];
+  for (let i = 0; i + 1 < rest.length; i++)
+    path([[N[rest[i]].cx, N[rest[i]].bottom], [N[rest[i + 1]].cx, N[rest[i + 1]].y]], 'audio');
+
+  // ---- modulation into the read head --------------------------------------------
+  path([[motor.cx, motor.bottom], [motor.cx, mods.y]], 'mod', true, true);
+  path([[mods.right, mods.cy], [CX - 32, mods.cy], [CX - 32, N.read.cy - 9], [CX, N.read.cy - 9]], 'mod');
+  path([[jumps.right, jumps.cy], [CX - 18, jumps.cy], [CX - 18, N.read.cy + 9], [CX, N.read.cy + 9]], 'mod');
+  path([[jumps.cx, jumps.bottom], [jumps.cx, panel.y]], 'mod');
+  label(jumps.cx + 8, (jumps.bottom + panel.y) / 2 + 4, 'disc angle · skipping', C.amber);
+
+  // ---- the surface onto the sum -------------------------------------------------
+  const BUS = RX - 34;
+  const surface = [hiss, rumble, crackle, ticks];
+  surface.forEach(n => path([[n.x, n.cy], [BUS, n.cy]], 'audio', false));
+  const busTop = Math.min(hiss.cy, N.sum.cy), busBottom = Math.max(ticks.cy, N.sum.cy);
+  path([[BUS, busTop], [BUS, busBottom]], 'audio', false);
+  path([[BUS, N.sum.cy], [N.sum.cx + N.sum.r, N.sum.cy]], 'audio');
+  label(BUS - 6, N.sum.cy - 8, 'the surface', C.soft, 'end');
+
+  // ---- the boxes, over the lines ----------------------------------------------------
+  Object.values(N).forEach(n => { if (n.title) drawBox(n); });
+  [motor, mods, jumps, panel, hiss, rumble, crackle, ticks].forEach(drawBox);
+  svg += `<circle cx="${N.sum.cx}" cy="${N.sum.cy}" r="${N.sum.r}" fill="${C.box}" stroke="${C.ink}" stroke-width="1.6"/>`;
+  svg += `<path d="M${N.sum.cx - 7},${N.sum.cy} L${N.sum.cx + 7},${N.sum.cy} M${N.sum.cx},${N.sum.cy - 7} L${N.sum.cx},${N.sum.cy + 7}" stroke="${C.ink}" stroke-width="2"/>`;
+
+  // ---- column headings ------------------------------------------------------------
+  const head = (x, t) => svg += `<text x="${x}" y="14" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing="1.5" fill="${C.dim}">${t}</text>`;
+  head(LX, 'WHAT MOVES THE READ HEAD');
+  head(CX, 'THE AUDIO');
+  head(RX, 'THE RECORD’S SURFACE');
+
+  const el = document.getElementById('flow');
+  el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  el.innerHTML = svg;
+
+  // ---- the wordmark in the panel's 70s sci-fi lettering ------------------------------
+  try {
+    const big = (t, col, x) => { const a = rbPaths(t, 26, 1.7, 1.2); return { a, svg: `<g transform="translate(${x},4)"><g fill="none" stroke="${col}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${a.paths}</g><g fill="none" stroke="#121212" stroke-width=".32" stroke-linecap="round" stroke-linejoin="round">${a.paths}</g></g>` }; };
+    const small = rbPaths('SIGNAL FLOW', 13, 1.25, 1.05);
+    const p1 = big('WORN', C.ink, 0), p2 = big('VINYL', C.ink, p1.a.width + 13);
+    const w = p1.a.width + 13 + p2.a.width;
+    const sx = w + 22;
+    document.getElementById('wordmark').innerHTML =
+      `<svg viewBox="-2 0 ${sx + small.width + 4} 38" width="${sx + small.width + 4}" height="38" role="img" aria-label="Worn Vinyl signal flow">${p1.svg}${p2.svg}` +
+      `<rect x="${w + 10}" y="6" width="1" height="26" fill="#5a5852"/>` +
+      `<g transform="translate(${sx},12)" fill="none" stroke="${C.amber}" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">${small.paths}</g></svg>`;
+  } catch (e) {
+    document.getElementById('wordmark').textContent = 'WORN VINYL — SIGNAL FLOW';
+  }
+})();
+</script>
