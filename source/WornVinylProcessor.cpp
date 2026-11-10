@@ -8,6 +8,7 @@
 
 #include "base/source/fstreamer.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
+#include "pluginterfaces/vst/ivstprocesscontext.h"
 
 #include <algorithm>
 #include <cstring>
@@ -22,14 +23,14 @@ WornVinylProcessor::WornVinylProcessor ()
 {
 	setControllerClass (kWornVinylControllerUID);
 
-	// NO processContextRequirements. Since VST3 3.7 the ProcessContext is
-	// opt-in and the default is no flags - which is right today: the
-	// record turns at its own speed, not the song's. If anything ever syncs
-	// to the transport (a jump only while playing, say), add
-	//     processContextRequirements.needTransportState ();
-	// and for the beat needTempo () - without it tempo silently reads 120
-	// in every host and the validator prints "- None" rather than
-	// complaining.
+	// THE TRANSPORT, and nothing else. Since VST3 3.7 the ProcessContext is
+	// opt-in and the default is NO FLAGS: without this line kPlaying is
+	// never set, the record would turn with the song stopped, and nothing
+	// anywhere would say why. projectTimeSamples needs no flag (always
+	// valid). No tempo: the record turns at its own speed, not the song's
+	// (add needTempo () if anything ever syncs to the beat, or tempo
+	// silently reads 120).
+	processContextRequirements.needTransportState ();
 
 	mParams.assign (kNumParams, 0.0);
 	for (ParamID id = 0; id < kNumParams; ++id)
@@ -211,6 +212,15 @@ tresult PLUGIN_API WornVinylProcessor::process (ProcessData& data)
 
 	applyParameterChanges (data.inputParameterChanges);
 	pushParameters ();
+
+	// The transport: the record turns while the song plays, and its angle
+	// follows the song position (Dsp::setTransport). No context at all is
+	// "unknown", which turns as if playing.
+	if (data.processContext != nullptr)
+		mDsp.setTransport (true, (data.processContext->state & ProcessContext::kPlaying) != 0,
+		                   data.processContext->projectTimeSamples, data.numSamples);
+	else
+		mDsp.setTransport (false, false, 0, data.numSamples);
 
 	// A parameter-only block. Legal, and common when a host is drawing
 	// automation while the transport is stopped.

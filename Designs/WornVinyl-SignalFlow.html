@@ -62,6 +62,7 @@ header { display: grid; gap: 10px; border-bottom: 2px solid var(--edge); padding
   <section class="notes">
     <div class="note"><h2>Latency</h2><p>The read head rests 12 ms behind the write head, so wow, flutter and warp can bend the pitch both ways. The plug-in reports it (<span class="mono">576</span> samples at 48 kHz) and the host compensates. Dry, Mix and Bypass use the same 12 ms, so nothing phases or jumps.</p></div>
     <div class="note"><h2>Jumps</h2><p>Not compensated, on purpose. A stuck needle replays the last turn one to four times, then skips forward to where the song is now, so the output always returns to sync. Turn JUMPS off for no timing changes at all.</p></div>
+    <div class="note"><h2>Transport</h2><p>The record turns only while the song plays. On stop the disc and the screen freeze, the surface fades out in 30 ms and a stuck needle lets go; the music still passes. Every start or loop sets the disc from the song position, so a passage gets the same scratches every time.</p></div>
     <div class="note"><h2>Speed</h2><p>The motor’s rpm (Auto, 33, 45 or 78) sets how often the faults come round: scratch ticks, wow, the warp, a stuck groove’s length. The music keeps its own pitch and tempo.</p></div>
   </section>
 </div>
@@ -259,13 +260,13 @@ function rbConvert(root = document.body) {
   const H = y + 4;
 
   // ---- the left column: what moves the read head -----------------------------
-  const motor = box({ x: LX, y: N.buf.y, w: LW, title: 'MOTOR', lines: ['Auto (the disc’s own) / 33⅓ / 45 / 78 rpm', '→ the disc angle θ'], chips: ['ERA', 'DISC', 'SPEED'], theta: true });
+  const motor = box({ x: LX, y: N.buf.y, w: LW, title: 'MOTOR', lines: ['Auto (the disc’s own) / 33⅓ / 45 / 78 rpm', '→ the disc angle θ', 'runs while the host transport plays;', 'set from the song position on each', 'start or loop'], chips: ['ERA', 'DISC', 'SPEED', 'TRANSPORT'], theta: true });
   const mods = box({ x: LX, y: motor.bottom + 40, w: LW, title: 'PITCH MODULATION', lines: ['wow once a turn + 0.13 Hz drift', 'flutter 7.3 + 11.1 Hz', 'warp: one Gaussian bump a turn'], chips: ['WOW', 'FLUTTER', 'WARP'], theta: true });
   const jumps = box({ x: LX, y: mods.bottom + 26, w: LW, title: 'NEEDLE JUMPS', lines: ['at the deepest scratch, above 60 %', 'back one turn, 1 to 4 times,', 'then skip on to the live point', '6 ms crossfade each time'], chips: ['SCRATCHES', 'JUMPS'], theta: true });
   const panel = box({ x: LX, y: jumps.bottom + 40, w: LW, title: 'TO THE PANEL', lines: ['hidden outputs, every block:', 'disc angle → turntable screen', 'skipping → SKIP lamp'], dashed: true, stroke: C.amber, fill: '#151515' });
 
   // ---- the right column: the record's surface --------------------------------
-  const hiss = box({ x: RX, y: N.mono.y - 44, w: RW, title: 'SURFACE HISS', lines: ['shellac: a 2.5 kHz roar', 'vinyl: soft and dark'], chips: ['DUST'], theta: true });
+  const hiss = box({ x: RX, y: N.mono.y - 44, w: RW, title: 'SURFACE HISS', lines: ['shellac: a 2.5 kHz roar', 'vinyl: soft and dark', 'all four fade out in 30 ms on stop'], chips: ['DUST'], theta: true });
   const rumble = box({ x: RX, y: hiss.bottom + 12, w: RW, title: 'RUMBLE', lines: ['25 Hz low-passed noise'], chips: ['DUST'] });
   const crackle = box({ x: RX, y: rumble.bottom + 12, w: RW, title: 'CRACKLE', lines: ['ticks and 10 % pops', 'rate rises with dust²'], chips: ['DUST'] });
   const ticks = box({ x: RX, y: crackle.bottom + 12, w: RW, title: 'SCRATCH TICKS', lines: ['one per scratch per turn', '+ a thump when the needle lands'], chips: ['SCRATCHES'], theta: true });
@@ -278,7 +279,7 @@ function rbConvert(root = document.body) {
   path([[DRY, N.mix.cy], [DRY, N.byp.cy], [CX, N.byp.cy]], 'dry');
   label(DRY + 8, N.mix.cy - 8, 'dry', C.dim);
   label(DRY + 8, N.byp.cy - 8, 'dry', C.dim);
-  label(LX + LW - 10, dryY - 7, 'DRY TAP · FIXED 12 MS', C.dim, 'end');
+  label(LX + 2, dryY - 7, 'DRY TAP · 12 MS', C.dim);
 
   // ---- audio arrows down the spine --------------------------------------------
   const order = ['in', 'buf', 'read', 'mono'];

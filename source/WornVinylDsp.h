@@ -293,6 +293,23 @@ public:
 	void setOutputDb (double db);
 	void setBypass (bool on)          { mBypass.target = on ? 1.0 : 0.0; }
 
+	/** THE HOST'S TRANSPORT, once a block before process(). The record
+	    turns while the transport plays: stopped, the motor stops (the disc
+	    and the turntable screen freeze, no wow or flutter), the surface
+	    fades out in 30 ms and a stuck needle lets go. The music still
+	    goes through the recording chain, so monitoring a stopped track
+	    sounds the same, only silent underneath.
+
+	    ON EVERY START, and whenever the song position jumps (a loop, a
+	    locate), the disc's angle, the flutter's phases and the random
+	    numbers are set FROM THE SONG POSITION - so the scratches land on
+	    the same beats every time a passage plays, and a bounce of it is
+	    the same bounce.
+
+	    `known` false (a host that gives no ProcessContext): always
+	    turning, as if playing. */
+	void setTransport (bool known, bool playing, int64_t projectSample, int frames);
+
 	/** In place is fine: each sample is read before it is written. */
 	void process (const float* inL, const float* inR, float* outL, float* outR, int frames);
 
@@ -305,6 +322,9 @@ public:
 
 	/** True while the needle is stuck in a groove or jumping. */
 	bool skipping () const { return mOffset > 0.0 || mXfade > 0; }
+
+	/** True while the motor runs: playing, or a host that does not say. */
+	bool turning () const { return mTurning; }
 
 	int era () const { return mEra; }
 	int playingDisc () const { return effectiveDisc (mEra, mDisc); }
@@ -348,7 +368,8 @@ private:
 	void markIfChanged ();
 	void triggerGrain (double noiseAmp, double noiseTauS, double ringAmp, double ringHz, double ringTauS,
 	                   double pan, bool stereo);
-	void startJump (double newOffset);
+	void startJump (double newOffset, bool thump = true);
+	void syncToSong (int64_t projectSample);
 	double readAt (const std::vector<float>& buf, double delay) const;
 	double profileMakeupDb (const Profile& p) const;
 
@@ -375,6 +396,10 @@ private:
 	uint32_t mWrite = 0;
 	int mBaseDelay = 529;
 	double mTheta = 0.0;            // the motor, 0..1 a turn
+	bool mTurning = true;           // the transport: playing, or unknown
+	bool mSynced = false;           // set from the song position since the last start
+	int64_t mNextSample = 0;        // where the song should be at the next block
+	Smooth mSurface;                // 0..1: the surface fades with the motor
 	double mDriftPhase = 0.0, mFlutterPhase1 = 0.0, mFlutterPhase2 = 0.0, mFlutterWobble = 0.0;
 	double mMinDelay = 1e9;
 

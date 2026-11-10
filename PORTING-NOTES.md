@@ -144,11 +144,24 @@ crossfade plus a stylus-landing thump. The ring buffer holds four LP turns
 **Deterministic:** our own SplitMix64, re-seeded by `reset()` — the same
 audio is the same bounce, at any block size (tested).
 
+**Transport (10 Nov 2026).** The processor asks for `needTransportState ()`
+and calls `Dsp::setTransport` every block. The record turns only while the
+song plays: stopped, the motor stops (disc and screen freeze, no wow or
+flutter), the surface fades out in 30 ms (measured −210 dBFS 0.2 s later from
+−31 playing), no new crackle or ticks, and a stuck needle lets go without a
+thump. The music still passes, so a stopped track can be monitored. On every
+start and every jump in song position (a loop, a locate) the disc angle,
+flutter and drift phases and the random seed are set **from
+`projectTimeSamples`**, and the crackle grains and noise filters start empty:
+the same passage gets the same scratches every time (tested bit-identical
+across different histories, and across a loop). A host with no
+ProcessContext: always turning, as before.
+
 ## 6. Deliberate omissions, and the trap each one hides
 
 | Omitted | Why | What bites when it is undone |
 |---|---|---|
-| `processContextRequirements` | The record turns at its own speed | Since VST3 3.7 the context is opt-in; reading tempo without `needTempo ()` silently gives 120 |
+| Tempo in `processContextRequirements` | The record turns at its own speed; only `needTransportState ()` is asked for (since 10 Nov 2026) | Since VST3 3.7 the context is opt-in; reading tempo without `needTempo ()` silently gives 120 |
 | Messages | None needed | A message sent from `process()` is discarded by the host's connection proxy — per-block values go out as the hidden outputs |
 | Controller editor list | The editor polls at 30 Hz | In `editorDestroyed`, `dynamic_cast` is null inside `~EditorView()` — compare upcast pointers |
 | `restartComponent (kLatencyChanged)` | Latency (12 ms) depends only on the sample rate | If it ever changes while active, the host keeps the old compensation |
@@ -181,12 +194,12 @@ needle is stuck. Era label colours are generic period colours, no company's.
 ## 8. Verification (VM, 10 Nov 2026)
 
 ```sh
-tools/run-tests.sh                       # DSP 108, Layout 605, Params 128 — 0 failed (with Speed and Player)
+tools/run-tests.sh                       # DSP 119, Layout 605, Params 128 — 0 failed (with Speed, Player and the transport)
 SDK=external/vst3sdk   # (in the VM: a clean 3.8.1_build_84 clone)
 for f in source/*.cpp; do
   g++ -c -std=c++17 -DLINUX=1 -DRELEASE=1 -I$SDK -I$SDK/vstgui4 -Isource -o /tmp/$(basename $f .cpp).o $f
 done
-nm -C /tmp/*.o | grep " U " | grep "WornVinyl::"   # all 38 defined in the objects
+nm -C /tmp/*.o | grep " U " | grep "WornVinyl::"   # all 39 defined in the objects
 ```
 
 Measured: default patch with a −12 dBFS 1 kHz sine → output peak **−9.1 dBFS**

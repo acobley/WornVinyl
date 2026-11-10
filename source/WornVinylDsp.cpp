@@ -230,6 +230,7 @@ Dsp::Dsp ()
 	mMix.target = kMixDefault / 100.0;
 	mOutput.target = dbToGain (kOutputDefaultDb);
 	mBypass.target = 0.0;
+	mSurface.target = 1.0;
 	setSampleRate (44100.0);
 	snapParameters ();
 }
@@ -370,6 +371,8 @@ void Dsp::reset ()
 	mWrite = 0;
 	mSeed = kSeed;
 	mTheta = 0.0;
+	mSynced = false;
+	mNextSample = 0;
 	mDriftPhase = 0.0;
 	mFlutterPhase1 = 0.0;
 	mFlutterPhase2 = 0.37;
@@ -393,7 +396,7 @@ void Dsp::reset ()
 void Dsp::snapParameters ()
 {
 	mScratches.snap (); mDust.snap (); mWow.snap (); mFlutter.snap (); mWarp.snap ();
-	mMix.snap (); mOutput.snap (); mBypass.snap ();
+	mMix.snap (); mOutput.snap (); mBypass.snap (); mSurface.snap ();
 	if (mProfilePending)
 		designProfile ();
 	mProfileGain = 1.0;
@@ -436,6 +439,55 @@ void Dsp::setSpeed (int speed)
 void Dsp::setOutputDb (double db)
 {
 	mOutput.target = dbToGain (std::clamp (db, kOutputMinDb, kOutputMaxDb));
+}
+
+void Dsp::setTransport (bool known, bool playing, int64_t projectSample, int frames)
+{
+	const bool turning = ! known || playing;
+	if (known && playing)
+	{
+		// A start, or the song jumped (a loop, a locate): the disc follows.
+		if (! mSynced || projectSample != mNextSample)
+			syncToSong (projectSample);
+		mSynced = true;
+		mNextSample = projectSample + (frames > 0 ? frames : 0);
+	}
+	else
+		mSynced = false;
+	mTurning = turning;
+	mSurface.target = turning ? 1.0 : 0.0;
+}
+
+void Dsp::syncToSong (int64_t projectSample)
+{
+	// Everything that turns, from the song position: the same passage gets
+	// the same scratches, wow and crackle every time it plays.
+	const double t = static_cast<double> (projectSample) / mFs;
+	auto frac = [] (double x) { return x - std::floor (x); };
+	mTheta = frac (t * turntableRpm (mEra, mDisc, mSpeed) / 60.0);
+	mDriftPhase = frac (t * kDriftHz);
+	mFlutterPhase1 = frac (t * kFlutterHz1);
+	mFlutterPhase2 = frac (t * kFlutterHz2 + 0.37);
+	mFlutterWobble = frac (t * kFlutterWobbleHz);
+	mSeed = kSeed ^ (static_cast<uint64_t> (projectSample) * 0x9E3779B97F4A7C15ull);
+
+	// The surface starts afresh: no crackle left ringing from another
+	// passage, the noise filters empty, and from silence if the record was
+	// standing still.
+	for (auto& g : mGrains)
+		g.live = false;
+	mHissShapeL.clear (); mHissShapeR.clear (); mHissShape2L.clear (); mHissShape2R.clear ();
+	mRumbleL.clear (); mRumbleR.clear ();
+	mPlayL.clear (); mPlayR.clear ();
+	if (! mTurning)
+		mSurface.value = 0.0;
+
+	// A stuck needle belongs to the passage it stuck in.
+	if (mOffset > 0.0 || mStickLeft > 0)
+	{
+		mStickLeft = 0;
+		startJump (0.0, false);
+	}
 }
 
 double Dsp::takeMinReadDelay ()
@@ -481,12 +533,14 @@ void Dsp::triggerGrain (double noiseAmp, double noiseTauS, double ringAmp, doubl
 }
 
 //------------------------------------------------------------------------
-void Dsp::startJump (double newOffset)
+void Dsp::startJump (double newOffset, bool thump)
 {
 	mXfadeFrom = mOffset;
 	mOffset = newOffset;
 	mXfade = mXfadeLen;
 	++mJumpCount;
+	if (! thump)
+		return;
 
 	// The stylus lands: a thump and a crack.
 	const Profile& p = profileOf (mActiveEra, effectiveDisc (mActiveEra, mActiveDisc));
@@ -521,6 +575,7 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 		return;
 
 	const double k = mSmoothK;
+	const double k3 = 1.0 - std::exp (-1.0 / (0.03 * mFs / 4.6));   // the surface: ~30 ms to silence
 	const double fadeStep = 1.0 / (0.008 * mFs);
 	const double maxOffset = static_cast<double> (mMask) - 4.0 * kBaseDelaySeconds * mFs - 8.0;
 
@@ -559,9 +614,12 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 		const Profile& prof = profileOf (era, disc);
 		const double fr = turntableRpm (era, mActiveDisc, mSpeed) / 60.0;
 
-		// ---- the motor ---------------------------------------------------------
+		// ---- the motor: it turns while the transport plays ---------------------
+		const bool turning = mTurning;
+		const double surfaceGain = mSurface.next (k3);
 		const double prevTheta = mTheta;
-		mTheta += fr / mFs;
+		if (turning)
+			mTheta += fr / mFs;
 		const bool wrapped = mTheta >= 1.0;
 		if (wrapped)
 			mTheta -= 1.0;
@@ -572,6 +630,12 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 		// ---- the scratches, and the needle sticking at the deepest ------------
 		const int active = activeScratches (scratches);
 		const bool jumpsAllowed = jumpChancePerSecond (scratches, mJumpsOn) > 0.0;
+		if (! turning && (mOffset > 0.0 || mStickLeft > 0) && mXfade == 0)
+		{
+			// Stopped with the needle stuck: it lets go, quietly.
+			mStickLeft = 0;
+			startJump (0.0, false);
+		}
 		if (crossed (scratchSlot (0).phase))
 		{
 			const double rev = mFs / fr;
@@ -615,14 +679,18 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 		// ---- the read delay: wow, drift, flutter, warp -------------------------
 		const double wowDepth = wow * kWowMaxDepth;
 		const double wowA = wowDepth / (kTwoPi * fr) * mFs;
-		mDriftPhase += kDriftHz / mFs;
+		if (turning)
+			mDriftPhase += kDriftHz / mFs;
 		if (mDriftPhase >= 1.0) mDriftPhase -= 1.0;
 		const double driftA = 0.25 * wowDepth / (kTwoPi * kDriftHz) * mFs;
 
 		const double flDepth = flutter * kFlutterMaxDepth;
-		mFlutterPhase1 += kFlutterHz1 / mFs; if (mFlutterPhase1 >= 1.0) mFlutterPhase1 -= 1.0;
-		mFlutterPhase2 += kFlutterHz2 / mFs; if (mFlutterPhase2 >= 1.0) mFlutterPhase2 -= 1.0;
-		mFlutterWobble += kFlutterWobbleHz / mFs; if (mFlutterWobble >= 1.0) mFlutterWobble -= 1.0;
+		if (turning)
+		{
+			mFlutterPhase1 += kFlutterHz1 / mFs; if (mFlutterPhase1 >= 1.0) mFlutterPhase1 -= 1.0;
+			mFlutterPhase2 += kFlutterHz2 / mFs; if (mFlutterPhase2 >= 1.0) mFlutterPhase2 -= 1.0;
+			mFlutterWobble += kFlutterWobbleHz / mFs; if (mFlutterWobble >= 1.0) mFlutterWobble -= 1.0;
+		}
 		const double wobble = 1.0 + 0.35 * std::sin (kTwoPi * mFlutterWobble);
 		// 0.6 + 0.4 of the depth, and the wobble up to 1.35: the peak stays
 		// within the stated depth / 1.35 of it on average.
@@ -678,23 +746,23 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 
 		// ---- the surface: what the stylus meets in the groove ------------------
 		double sL = 0.0, sR = 0.0;
-		if (dust > 0.0)
+		if (dust > 0.0 && surfaceGain > 0.0)
 		{
 			const double swish = 1.0 + 0.2 * std::sin (kTwoPi * mTheta);
-			const double hiss = dbToGain (prof.hissDb) * std::pow (dust, 0.75) * mHissNorm * swish;
+			const double hiss = dbToGain (prof.hissDb) * std::pow (dust, 0.75) * mHissNorm * swish * surfaceGain;
 			const double nL = bipolar ();
 			const double nR = stereo ? bipolar () : nL;
 			const double hL = mHissShape2L.process (mHissShapeL.process (nL));
 			const double hR = stereo ? mHissShape2R.process (mHissShapeR.process (nR)) : hL;
 
-			const double rum = dbToGain (prof.rumbleDb) * dust * mRumbleNorm;
+			const double rum = dbToGain (prof.rumbleDb) * dust * mRumbleNorm * surfaceGain;
 			const double r0 = mRumbleL.process (bipolar ());
 			const double r1 = stereo ? mRumbleR.process (bipolar ()) : r0;
 
 			sL += hiss * hL + rum * r0;
 			sR += hiss * hR + rum * r1;
 
-			if (uniform () < crackleRate (era, disc, dust * 100.0) / mFs)
+			if (turning && uniform () < crackleRate (era, disc, dust * 100.0) / mFs)
 			{
 				const double u = uniform ();
 				const double a = dbToGain (prof.crackleDb) * u * u * u;

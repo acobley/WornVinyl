@@ -471,6 +471,118 @@ static void testPlayer ()
 }
 
 //------------------------------------------------------------------------
+/** Run with a transport: playing or not, from a song position. */
+static void runTransport (Dsp& d, const std::vector<float>& in, std::vector<float>& out, bool playing,
+                          int64_t& position, int block = 256)
+{
+	out.resize (in.size ());
+	std::vector<float> r (in.size ());
+	for (size_t i = 0; i < in.size (); i += block)
+	{
+		const int n = static_cast<int> (std::min<size_t> (block, in.size () - i));
+		d.setTransport (true, playing, position, n);
+		d.process (in.data () + i, in.data () + i, out.data () + i, r.data () + i, n);
+		if (playing)
+			position += n;
+	}
+}
+
+static void testTransport ()
+{
+	std::printf ("transport: the record turns while the song plays\n");
+	const double fs = 48000;
+	std::vector<float> silence (static_cast<size_t> (fs), 0.0f), out;
+	auto busy = [&] (Dsp& d) {
+		d.setSampleRate (fs);
+		d.setEra (kEra1920);
+		d.setPlayer (kPlayerModern);
+		d.setDustPct (100); d.setScratchesPct (100); d.setWowPct (50);
+		d.snapParameters ();
+	};
+
+	// Stopped: the surface goes and the disc stands still.
+	{
+		Dsp d;
+		busy (d);
+		int64_t pos = 0;
+		runTransport (d, silence, out, true, pos);
+		const double playingDb = rmsDb (out, 24000);
+		const double angle = d.discAngle ();
+		runTransport (d, silence, out, false, pos);
+		const double stoppedDb = rmsDb (out, 9600);   // from 0.2 s after the stop
+		std::printf ("  surface: playing %.1f dBFS RMS, stopped %.1f dBFS\n", playingDb, stoppedDb);
+		CHECK (playingDb > -60.0, "negative control: the surface is there while playing");
+		CHECK (stoppedDb < -120.0, "silent underneath when stopped");
+		CHECK (d.discAngle () == angle && ! d.turning (), "the disc stands still");
+		runTransport (d, silence, out, true, pos);
+		CHECK (rmsDb (out, 24000) > -60.0 && d.turning (), "and starts again with the song");
+	}
+
+	// The music still goes through while stopped (monitoring).
+	{
+		Dsp d;
+		d.setSampleRate (fs);
+		clean (d);
+		auto in = sine (fs, 1000, 1.0, 0.25);
+		int64_t pos = 0;
+		runTransport (d, in, out, false, pos);
+		CHECK (std::fabs (rmsDb (out, 4800) - rmsDb (in, 4800)) < 1.0, "a stopped transport still passes the music");
+	}
+
+	// The same song position plays the same - whatever came before.
+	auto from = [&] (int64_t start, double warmup) {
+		Dsp d;
+		busy (d);
+		int64_t pos = 77777;
+		std::vector<float> w (static_cast<size_t> (fs * warmup), 0.0f), o;
+		runTransport (d, w, o, true, pos);       // some other passage first
+		runTransport (d, w, o, false, pos);      // stop
+		pos = start;
+		runTransport (d, silence, o, true, pos); // play from `start`
+		return o;
+	};
+	const auto a = from (480000, 0.5), b = from (480000, 1.3), c = from (500000, 0.5);
+	CHECK (a == b, "the same passage gets the same scratches and crackle every time");
+	CHECK (a != c, "negative control: another passage does not");
+
+	// A loop: the song jumps back, the disc follows.
+	{
+		Dsp d;
+		busy (d);
+		int64_t pos = 480000;
+		std::vector<float> first, second;
+		runTransport (d, silence, first, true, pos);
+		pos = 480000;                            // the host loops, still playing
+		runTransport (d, silence, second, true, pos);
+		CHECK (first == second, "a loop replays its passage exactly");
+	}
+
+	// Stopping with the needle stuck lets it go.
+	{
+		Dsp d;
+		busy (d);
+		d.setScratchesPct (100);
+		d.snapParameters ();
+		int64_t pos = 0;
+		std::vector<float> chunk (480, 0.0f);
+		int guard = 0;
+		while (! d.skipping () && guard++ < 20000)
+			runTransport (d, chunk, out, true, pos, 480);
+		CHECK (d.skipping (), "the needle stuck at 100 %%");
+		runTransport (d, silence, out, false, pos);
+		CHECK (! d.skipping (), "and let go when the transport stopped");
+	}
+
+	// No ProcessContext at all: it turns, as before.
+	{
+		Dsp d;
+		busy (d);
+		d.setTransport (false, false, 0, 256);
+		CHECK (d.turning (), "a host that does not say: always turning");
+	}
+}
+
+//------------------------------------------------------------------------
 static void testMonoAndDeterminism ()
 {
 	std::printf ("mono eras, determinism\n");
@@ -584,6 +696,7 @@ int main ()
 	testJumps ();
 	testSpeed ();
 	testPlayer ();
+	testTransport ();
 	testMonoAndDeterminism ();
 	testSmoothingAndEdges ();
 	testCost ();
