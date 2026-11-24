@@ -6,6 +6,8 @@
 #   Layout  tests/LayoutTests.cpp  - SDK-free
 #   Params  tests/ParamsTests.cpp  - header-only SDK files
 #                                    (external/vst3sdk, or VST3_SDK_ROOT)
+#   tools/check-versions.py, installer/test-build-release.sh and
+#   installer/test-publish.sh (the release scripts' refusals, stubbed)
 #------------------------------------------------------------------------
 set -u
 
@@ -33,6 +35,21 @@ if [ -f "$SDK/pluginterfaces/vst/vsttypes.h" ]; then
 else
     printf '\n=== Params ===\n  SKIPPED: no VST3 SDK at %s (run ./setup-xcode.sh once, or set VST3_SDK_ROOT)\n' "$SDK"
 fi
+
+# The version and the maker's name, in every file that carries them, and
+# the release scripts' refusals (stubbed - they run on Linux too).
+printf '\n=== versions ===\n'
+python3 "$ROOT/tools/check-versions.py" || fail=1
+for t in test-build-release test-publish; do
+    printf '\n=== installer/%s ===\n' "$t"
+    if [ -x "$ROOT/installer/$t.sh" ]; then
+        "$ROOT/installer/$t.sh" || fail=1
+    else
+        # A script that will not run is not a check that passed.
+        echo "  NOT EXECUTABLE: installer/$t.sh - chmod +x installer/*.sh"
+        fail=1
+    fi
+done
 
 echo
 [ $fail -eq 0 ] && echo "ALL SUITES PASSED" || echo "SOMETHING FAILED"

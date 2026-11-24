@@ -310,6 +310,29 @@ validator build/VST3/Release/WornVinyl.vst3
 auval -v aufx WVnl AECo
 ```
 
+## 8a. Releasing (24 Nov 2026)
+
+`installer/` is R2Synth's, renamed (NAME `WornVinyl`, ids
+`audio.WornVinyl.vst3` / `.audiounit`, `auval -v aufx WVnl AECo`):
+
+```sh
+installer/build-release.sh              # tests, clean universal build, checks, ONE signed, notarised pkg
+installer/verify-install.sh             # after installing it (on a Mac that never had the build tree)
+installer/publish-release.sh --dry-run  # every check, nothing pushed
+installer/publish-release.sh            # checksum into the notes, push, tag the BUILD commit, GitHub Release
+```
+
+`installer/README.md` is the walkthrough (certificates, notary profile, the
+dead-AU symlink trap, Gatekeeper). Differences from R2Synth: MasterLoud's
+rule that the licence pane appears only when there is a `LICENSE` file -
+there is none yet, though `version.h` says CC BY-SA 4.0; no presets, so that
+component is dropped (the distribution trimmed of both was checked
+well-formed with exactly the VST3 and AU pkg-refs). `tools/check-versions.py`
+came with it. `tools/run-tests.sh` now also runs it and the release scripts'
+stubbed refusals (22 + 18 cases). `installer/release-notes-1.0.0.0.md` is
+drafted, with the SHA-256 placeholder `publish-release.sh` fills in.
+Notary profile: `project6-notary`, the one all the plug-ins share.
+
 ## 9. The SDK
 
 In-tree (`external/`, git-ignored), the default: this plug-in may ship on
