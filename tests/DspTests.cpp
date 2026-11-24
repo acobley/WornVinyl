@@ -251,7 +251,10 @@ static void testMeasuredLatency ()
 	// and every burst comes out on it. What is left is the era EQ's own
 	// group delay: the 1960s' 4-pole low-pass at 15 kHz delays by ~0.03 ms
 	// (1.3 samples at 48 k, 3 at 96 k) - a filter's delay, which no plug-in
-	// reports. So the tolerance is in TIME: 0.05 ms.
+	// reports. So the tolerance is in TIME: 0.05 ms. The bursts land within
+	// a sample of each other, not exactly together: the oversamplers' IIR
+	// half-bands delay a little more or less with frequency, and each
+	// burst's spectrum differs (wow, by contrast, spreads them by ~100).
 	double still48 = 0.0;
 	for (double fs : { 44100.0, 48000.0, 96000.0 })
 	{
@@ -264,7 +267,7 @@ static void testMeasuredLatency ()
 		mean /= t.size ();
 		if (fs == 48000.0) still48 = mean;
 		std::printf ("  %.0f Hz still: reported %d, measured %.1f (%.1f .. %.1f)\n", fs, d.latencySamples (), mean, lo, hi);
-		CHECK (std::fabs (mean - d.latencySamples ()) < 0.00005 * fs && hi - lo < 0.5,
+		CHECK (std::fabs (mean - d.latencySamples ()) < 0.00005 * fs && hi - lo < 1.0,
 		       "%.0f Hz: with nothing moving the head, measured = reported (%.1f vs %d)", fs, mean, d.latencySamples ());
 	}
 
@@ -344,6 +347,87 @@ static void testLevels ()
 		CHECK (rmsDb (l) < -30.0 && rmsDb (l) > -90.0, "audible but not loud in %s", eraName (e));
 	}
 	std::printf ("  (RMS/peak dBFS)\n");
+}
+
+//------------------------------------------------------------------------
+/** A tone's level in `x` (dBFS), from a Blackman-Harris windowed DFT over
+    the last `n` samples - for spotting an alias 100 dB down. */
+static double toneDb (const std::vector<float>& x, size_t n, double fs, double hz)
+{
+	const size_t from = x.size () - n;
+	double re = 0, im = 0, w = 0;
+	for (size_t i = 0; i < n; ++i)
+	{
+		const double t = double (i) / (n - 1);
+		const double win = 0.35875 - 0.48829 * std::cos (2 * kPi * t) + 0.14128 * std::cos (4 * kPi * t) -
+		                   0.01168 * std::cos (6 * kPi * t);
+		re += win * x[from + i] * std::cos (2 * kPi * hz * i / fs);
+		im += win * x[from + i] * std::sin (2 * kPi * hz * i / fs);
+		w += win;
+	}
+	return 20 * std::log10 (2 * std::sqrt (re * re + im * im) / w + 1e-30);
+}
+
+static void testAliasing ()
+{
+	std::printf ("aliasing: a 10 kHz tone's third harmonic (30 kHz) must not fold back to 18 kHz\n");
+	const double fs = 48000;
+	const size_t n = 65536;
+	auto in = sine (fs, 10000, 2.0, 0.5);   // -6 dBFS
+	auto loud = sine (fs, 10000, 2.0, 0.9); // -1 dBFS
+
+	// NEGATIVE CONTROL: the lathe's curve applied the naive way, at 48 k -
+	// what the plug-in did before the oversampling. The measurement sees it.
+	{
+		std::vector<float> naive (in.size ());
+		for (size_t i = 0; i < in.size (); ++i)
+			naive[i] = static_cast<float> (latheCurve (in[i], profileOf (kEra1960, kDiscVinyl).drive));
+		const double a = toneDb (naive, n, fs, 18000) - toneDb (naive, n, fs, 10000);
+		std::printf ("  the lathe's curve, not oversampled: 18 kHz at %.1f dBc\n", a);
+		CHECK (a > -60.0, "negative control: the naive curve aliases (%.1f dBc), so the measurement can see it", a);
+	}
+
+	double worst = -300;
+	for (int e = 0; e < kEraCount; ++e)
+		for (int spk = 0; spk < kSpeakerCount; ++spk)
+			for (auto* x : { &in, &loud })
+			{
+				Dsp d;
+				d.setSampleRate (fs);
+				d.setEra (e);
+				d.setSpeaker (spk);
+				clean (d);
+				std::vector<float> l, r;
+				run (d, *x, *x, l, r);
+				const double a = toneDb (l, n, fs, 18000) - toneDb (l, n, fs, 10000);
+				worst = std::max (worst, a);
+				CHECK (a < -100.0, "%s through %s, %s: 18 kHz at %.1f dBc", eraName (e), speakerName (spk),
+				       x == &in ? "-6 dBFS" : "-1 dBFS", a);
+			}
+	std::printf ("  every era x every speaker, -6 and -1 dBFS: worst alias %.1f dBc\n", worst);
+
+	// THE OVERSAMPLERS' DELAY IS READ BACK: at Mix 50 % the wet lines up
+	// with the dry, so a tone does not comb. Uncompensated, the wet would
+	// be 5 samples late (lathe) or 10.6 (lathe + speaker): -12.5 dB at
+	// 5 kHz, and at 3 kHz for the second (10.6 samples is nearly a whole
+	// 5 kHz period, which would pass by luck). Through the 1970s' chain.
+	for (int spk : { kSpeakerOff, kSpeakerHiFi })
+		for (double hz : { 3000.0, 5000.0 })
+		{
+			Dsp d;
+			d.setSampleRate (fs);
+			d.setEra (kEra1970);
+			d.setSpeaker (spk);
+			clean (d);
+			d.setMixPct (50);
+			d.snapParameters ();
+			auto t = sine (fs, hz, 1.0, 0.25);
+			std::vector<float> l, r;
+			run (d, t, t, l, r);
+			const double g = rmsDb (l, t.size () / 2) - rmsDb (t, t.size () / 2);
+			std::printf ("  mix 50 %%, 1970s, speaker %s: %.0f kHz at %+.2f dB\n", speakerName (spk), hz / 1000, g);
+			CHECK (std::fabs (g) < 1.0, "speaker %s: wet and dry line up at %.0f Hz (%+.2f dB)", speakerName (spk), hz, g);
+		}
 }
 
 //------------------------------------------------------------------------
@@ -978,6 +1062,7 @@ int main ()
 	testLatencyAndDry ();
 	testMeasuredLatency ();
 	testLevels ();
+	testAliasing ();
 	testWorstCase ();
 	testPitch ();
 	testJumps ();

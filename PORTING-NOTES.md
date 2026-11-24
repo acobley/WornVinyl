@@ -102,7 +102,8 @@ DSP is never touched from the UI thread.
 input → ring buffer ─(read: 12 ms + wow + drift + flutter + warp + jump offset, Hermite)→
       → mono sum / stereo width of the era
       → THE RECORDING, music only: era EQ (2-pole HP, 4-pole Butterworth LP, two
-        resonances - the 1920s horn) → lathe saturation (1−d)·x + d·tanh(1.5x)/1.5
+        resonances - the 1920s horn) → lathe saturation (1−d)·x + d·tanh(1.5x)/1.5,
+        at 4x (see Aliasing)
         → make-up gain (the EQ's mean power 125 Hz–4 kHz put back, −3…+9 dB)
       + THE SURFACE through THE PLAYER: hiss (shellac: band-passed 2.5 kHz roar;
         vinyl: soft and dark), rumble (25 Hz), crackle grains (ticks, 10 % pops),
@@ -166,8 +167,8 @@ Last in the wet chain, so the music **and** the surface come out of it (a
 tested). Chosen freely, not tied to the era. Per channel:
 
 ```
-amp soft clip (1−d)x + d·tanh(1.5x)/1.5 → cone excursion (the band under
-coneHz through tanh(kx)/k) → 2 HP + 2 LP + 4 peaks → cabinet / horn echo
+[at 4x: amp soft clip (1−d)x + d·tanh(1.5x)/1.5 → cone excursion (the band
+under coneHz through tanh(kx)/k)] → 2 HP + 2 LP + 4 peaks → cabinet / horn echo
 (fed back through a one-pole LP) → make-up (125 Hz–4 kHz mean power, ±9 dB)
 ```
 
@@ -184,8 +185,27 @@ mono (a 1970s stereo LP on a Dansette is mono). A speaker change fades like
 an era change (8 ms out, swap, in). The echo buffer is sized in
 `setSampleRate`; `designProfile` (which can run on the audio thread)
 allocates nothing — `speakerMakeup` designs a copy that only reads the
-echo's length. Cost with the stereo 3-way and everything at 100 %: 0.7 % of
-a VM core.
+echo's length. Cost with the stereo 3-way and everything at 100 %: 2.2 % of
+a VM core (0.7 % before the oversampling).
+
+**Aliasing (24 Nov 2026).** A host's test: a 10 kHz tone gave an 18 kHz
+component at −54.2 dBc (6-inch speaker) - the third harmonic (30 kHz)
+folding back at 48 k. Reproduced exactly; the bigger source was the lathe,
+always on (−47 dBc at −6 dBFS, −41 at −1 dBFS, speaker off). Every curve
+that bends the signal - the lathe, the speaker's amp and cone - now runs in
+an `Oversampler4x`: two polyphase IIR half-bands up and two down (hiir's
+design, 9 + 6 coefficients, 100 dB stopband, flat to 0.001 dB to 20 kHz),
+the curve at 4x between them. Measured: below −146 dBc for every era ×
+every speaker at −6 and −1 dBFS (`testAliasing`, beside the naive curve
+at −47 dBc as its negative control). The linear filters stay at 1x.
+
+The half-bands DELAY: ~5.3 samples at the base rate, at every rate
+(`Oversampler4x::delaySamples`, an impulse's centre of mass). Caught at once
+by the latency guard (582.6 measured vs 576). The read head now reads that
+much earlier - once for the lathe, again while a speaker is on, rounded to
+whole samples so a still record is still read exactly - and changes only
+inside the era/speaker fade. Without it Mix 50 % combed (−12.5 dB at 5 kHz;
+tested at 3 and 5 kHz, with and without a speaker).
 
 ## 6. Deliberate omissions, and the trap each one hides
 
@@ -240,7 +260,7 @@ needle is stuck. Era label colours are generic period colours, no company's.
 ## 8. Verification (VM, 10 Nov 2026)
 
 ```sh
-tools/run-tests.sh                       # DSP 158, Layout 1104, Params 156 — 0 failed (24 Nov 2026)
+tools/run-tests.sh                       # DSP 223, Layout 1104, Params 156 — 0 failed (24 Nov 2026)
 SDK=external/vst3sdk   # (in the VM: a clean 3.8.1_build_84 clone)
 for f in source/*.cpp; do
   g++ -c -std=c++17 -DLINUX=1 -DRELEASE=1 -I$SDK -I$SDK/vstgui4 -Isource -o /tmp/$(basename $f .cpp).o $f

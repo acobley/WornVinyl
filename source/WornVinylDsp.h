@@ -34,6 +34,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -316,6 +317,71 @@ struct Biquad
 };
 
 //------------------------------------------------------------------------
+/** THE CURVES THAT BEND THE SIGNAL - and so make harmonics, which alias
+    unless they run oversampled (Oversampler4x below). Public so the tests
+    can show what the naive version does. Unity for small signals. */
+inline double latheCurve (double x, double drive)
+{
+	return (1.0 - drive) * x + drive * std::tanh (1.5 * x) / 1.5;
+}
+
+//------------------------------------------------------------------------
+/** A HALF-BAND FILTER for 2x up- or down-sampling: two parallel chains of
+    first-order allpasses, polyphase (Valenzuela & Constantinides; the
+    design formulae are Laurent de Soras' hiir's). IIR, so it adds only a
+    few samples of delay where a linear-phase FIR would add dozens. */
+struct HalfBand
+{
+	static constexpr int kMaxCoefs = 16;
+	int n = 0;
+	double c[kMaxCoefs] = {}, x[kMaxCoefs] = {}, y[kMaxCoefs] = {};
+
+	/** `attenuationDb` in the stopband; `transition` the band from the
+	    passband's edge to Nyquist/2, as a fraction of the HIGH rate. */
+	void design (double attenuationDb, double transition);
+	void clear ();
+
+	/** One sample in at the low rate, two out at the high rate. */
+	void up (double in, double& out0, double& out1);
+	/** Two samples in at the high rate, one out at the low rate. */
+	double down (double in0, double in1);
+
+private:
+	void paths (double& even, double& odd);
+};
+
+/** 4x OVERSAMPLING around a nonlinear curve: up 2x twice, the curve at
+    4x, down twice. Harmonics up to the 9th of anything in the audio band
+    stay below the 4x rate's Nyquist and are filtered off on the way down,
+    instead of folding back as aliases. */
+struct Oversampler4x
+{
+	HalfBand up1, up2, down2, down1;
+
+	void design ();   // fixed coefficients; no allocation
+	void clear ();
+
+	/** Its delay at low frequencies, in samples at the base rate (an
+	    impulse's centre of mass through the four half-bands; ~5.3, the
+	    same at every rate). The read head reads this much earlier per
+	    oversampler in the chain, so the wet comes out at the reported
+	    latency and lines up with the dry. */
+	static double delaySamples ();
+
+	template <typename Curve>
+	double process (double x, Curve&& curve)
+	{
+		double a, b, a0, a1, b0, b1;
+		up1.up (x, a, b);
+		up2.up (a, a0, a1);
+		up2.up (b, b0, b1);
+		const double p = down2.down (curve (a0), curve (a1));
+		const double q = down2.down (curve (b0), curve (b1));
+		return down1.down (p, q);
+	}
+};
+
+//------------------------------------------------------------------------
 /** The era's playback EQ on one channel: HP, 4-pole LP, two peaks. */
 struct EraEq
 {
@@ -331,7 +397,8 @@ struct EraEq
 struct SpeakerChain
 {
 	Biquad hp1, hp2, lp1, lp2, pk[4];
-	double ampDrive = 0.0, coneK = 0.0, coneCoef = 0.0, coneLp = 0.0;
+	double ampDrive = 0.0, coneK = 0.0, coneCoef = 0.0, coneLp = 0.0;   // coneCoef at 4x the rate
+	Oversampler4x os;                   // the amp and the cone run at 4x
 	std::vector<double> comb;           // sized by allocate() only
 	uint32_t combMask = 0, combWrite = 0;
 	int combCapacity = 0;               // the longest echo the buffer holds
@@ -513,8 +580,11 @@ private:
 
 	// the chain
 	EraEq mEqL, mEqR;           // the recording - the music
+	Oversampler4x mLatheOsL, mLatheOsR;   // the lathe's saturation, at 4x
 	EraEq mPlayL, mPlayR;       // the player - the surface
 	double mMakeupDb = 0.0;
+	double mOsDelay = 0.0;          // Oversampler4x::delaySamples (), read earlier by it
+	double mOsComp = 0.0;           // ...once for the lathe, again while a speaker is on
 	SpeakerChain mSpkL, mSpkR;  // the speaker - everything
 	double mSpeakerMakeupDb = 0.0;
 	double mWarpLpL = 0.0, mWarpLpR = 0.0, mWarpLpCoef = 1.0;

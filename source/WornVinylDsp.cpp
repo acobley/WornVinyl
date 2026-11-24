@@ -280,6 +280,146 @@ double Biquad::magnitude (double fs, double hz) const
 }
 
 //------------------------------------------------------------------------
+// HalfBand - hiir's polyphase IIR half-band (Laurent de Soras, WTFPL):
+// the coefficients from elliptic-function series, then two allpass chains.
+//------------------------------------------------------------------------
+namespace {
+double ipow (double x, int n)
+{
+	double r = 1.0;
+	while (n-- > 0)
+		r *= x;
+	return r;
+}
+
+double accNum (double q, int order, int c)
+{
+	double acc = 0.0, term = 0.0;
+	int sign = 1;
+	for (int i = 0; i < 64; ++i, sign = -sign)
+	{
+		term = ipow (q, i * (i + 1)) * std::sin ((i * 2 + 1) * c * kPi / order) * sign;
+		acc += term;
+		if (std::fabs (term) <= 1e-100)
+			break;
+	}
+	return acc;
+}
+
+double accDen (double q, int order, int c)
+{
+	double acc = 0.0, term = 0.0;
+	int sign = -1;
+	for (int i = 1; i < 64; ++i, sign = -sign)
+	{
+		term = ipow (q, i * i) * std::cos (i * 2 * c * kPi / order) * sign;
+		acc += term;
+		if (std::fabs (term) <= 1e-100)
+			break;
+	}
+	return acc;
+}
+} // namespace
+
+void HalfBand::design (double attenuationDb, double transition)
+{
+	double k = std::tan ((1.0 - transition * 2.0) * kPi / 4.0);
+	k *= k;
+	const double kk = std::pow (1.0 - k * k, 0.25);
+	const double e = 0.5 * (1.0 - kk) / (1.0 + kk);
+	const double e4 = e * e * e * e;
+	const double q = e * (1.0 + e4 * (2.0 + e4 * (15.0 + 150.0 * e4)));
+
+	const double ap = std::pow (10.0, -attenuationDb / 10.0);
+	const double a = ap / (1.0 - ap);
+	int order = static_cast<int> (std::ceil (std::log (a * a / 16.0) / std::log (q)));
+	if ((order & 1) == 0)
+		++order;
+	order = std::clamp (order, 3, 2 * kMaxCoefs + 1);
+	n = (order - 1) / 2;
+
+	for (int i = 0; i < n; ++i)
+	{
+		const int cc = i + 1;
+		const double ww = accNum (q, order, cc) * std::pow (q, 0.25) / (accDen (q, order, cc) + 0.5);
+		const double w2 = ww * ww;
+		const double xx = std::sqrt ((1.0 - w2 * k) * (1.0 - w2 / k)) / (1.0 + w2);
+		c[i] = (1.0 - xx) / (1.0 + xx);
+	}
+	clear ();
+}
+
+void HalfBand::clear ()
+{
+	for (int i = 0; i < kMaxCoefs; ++i)
+		x[i] = y[i] = 0.0;
+}
+
+void HalfBand::paths (double& even, double& odd)
+{
+	// Coefficients 0, 2, 4 ... on one path, 1, 3, 5 ... on the other; each
+	// a first-order allpass in z^2, run at the low rate.
+	for (int i = 0; i < n; i += 2)
+	{
+		const double t0 = (even - y[i]) * c[i] + x[i];
+		x[i] = even; y[i] = t0; even = t0;
+		if (i + 1 < n)
+		{
+			const double t1 = (odd - y[i + 1]) * c[i + 1] + x[i + 1];
+			x[i + 1] = odd; y[i + 1] = t1; odd = t1;
+		}
+	}
+}
+
+void HalfBand::up (double in, double& out0, double& out1)
+{
+	double even = in, odd = in;
+	paths (even, odd);
+	out0 = even;
+	out1 = odd;
+}
+
+double HalfBand::down (double in0, double in1)
+{
+	double even = in1, odd = in0;
+	paths (even, odd);
+	return 0.5 * (even + odd);
+}
+
+void Oversampler4x::design ()
+{
+	// 2x stage: flat to 0.21 of 2fs (20 kHz at 48 k), 100 dB down beyond.
+	// 4x stage: the signal is already under a quarter of ITS rate, so a
+	// wide transition does, with far fewer coefficients.
+	up1.design (100.0, 0.04);
+	down1.design (100.0, 0.04);
+	up2.design (100.0, 0.12);
+	down2.design (100.0, 0.12);
+}
+
+void Oversampler4x::clear ()
+{
+	up1.clear (); up2.clear (); down2.clear (); down1.clear ();
+}
+
+double Oversampler4x::delaySamples ()
+{
+	static const double kDelay = [] {
+		Oversampler4x o;
+		o.design ();
+		double sum = 0.0, moment = 0.0;
+		for (int i = 0; i < 4096; ++i)
+		{
+			const double h = o.process (i == 0 ? 1.0 : 0.0, [] (double v) { return v; });
+			sum += h;
+			moment += h * i;
+		}
+		return moment / sum;
+	} ();
+	return kDelay;
+}
+
+//------------------------------------------------------------------------
 void EraEq::design (const Profile& p, double fs)
 {
 	const double lp = std::min (p.lpHz, 0.45 * fs);
@@ -332,7 +472,8 @@ void SpeakerChain::design (const SpeakerProfile& p, double fs, double makeupDb)
 
 	ampDrive = p.ampDrive;
 	coneK = p.coneK;
-	coneCoef = p.coneHz > 0.0 ? 1.0 - std::exp (-kTwoPi * p.coneHz / fs) : 0.0;
+	coneCoef = p.coneHz > 0.0 ? 1.0 - std::exp (-kTwoPi * p.coneHz / (4.0 * fs)) : 0.0;   // runs at 4x
+	os.design ();
 
 	// The echo, rounded to whole samples (a few cents off the horn's
 	// length at 44.1 k - inaudible), never longer than the buffer.
@@ -349,6 +490,7 @@ void SpeakerChain::clear ()
 	for (auto& b : pk)
 		b.clear ();
 	coneLp = 0.0;
+	os.clear ();
 	combLp = 0.0;
 	std::fill (comb.begin (), comb.end (), 0.0);
 	combWrite = 0;
@@ -356,16 +498,18 @@ void SpeakerChain::clear ()
 
 double SpeakerChain::process (double x)
 {
-	// The amplifier: a soft clip, unity for small signals (the lathe's).
-	x = (1.0 - ampDrive) * x + ampDrive * std::tanh (1.5 * x) / 1.5;
-
-	// The cone: the band under its resonance moves it furthest, and that
-	// is what gives out first.
-	if (coneK > 0.0)
-	{
-		coneLp += coneCoef * (x - coneLp);
-		x += std::tanh (coneK * coneLp) / coneK - coneLp;
-	}
+	// The amplifier (a soft clip, the lathe's curve) and the cone (the band
+	// under its resonance moves it furthest, and gives out first): the
+	// two curves, at 4x the rate so their harmonics do not alias.
+	x = os.process (x, [this] (double v) {
+		v = latheCurve (v, ampDrive);
+		if (coneK > 0.0)
+		{
+			coneLp += coneCoef * (v - coneLp);
+			v += std::tanh (coneK * coneLp) / coneK - coneLp;
+		}
+		return v;
+	});
 
 	// The cone's (or the horn's) response.
 	x = lp2.process (lp1.process (hp2.process (hp1.process (x))));
@@ -461,6 +605,9 @@ void Dsp::setSampleRate (double fs)
 
 	mSpkL.allocate (mFs);
 	mSpkR.allocate (mFs);
+	mLatheOsL.design ();
+	mLatheOsR.design ();
+	mOsDelay = Oversampler4x::delaySamples ();
 
 	designProfile ();
 	reset ();
@@ -515,6 +662,11 @@ void Dsp::designProfile ()
 	mActiveDisc = mDisc;
 	mActivePlayer = mPlayer;
 	mActiveSpeaker = mSpeaker;
+	// The read head reads earlier by each oversampler's delay. Changed only
+	// here, while the wet is faded out, so the step is never heard.
+	// Whole samples: a still record's read head stays on a sample, so the
+	// Hermite reads it exactly (a fractional offset would dull the top).
+	mOsComp = std::round (mOsDelay * (mSpeaker != kSpeakerOff ? 2.0 : 1.0));
 
 	// The speaker. The UI thread's setSampleRate sized its echo; this
 	// only sets coefficients, so it is safe on the audio thread too.
@@ -537,6 +689,8 @@ void Dsp::designProfile ()
 	mEqR.design (p, mFs);
 	mEqL.clear ();
 	mEqR.clear ();
+	mLatheOsL.clear ();
+	mLatheOsR.clear ();
 	mMakeupDb = profileMakeupDb (p);
 	const Profile& player = playerProfile (mEra, disc, mPlayer);
 	mPlayL.design (player, mFs);
@@ -609,6 +763,7 @@ void Dsp::reset ()
 	for (auto& g : mGrains)
 		g.live = false;
 	mEqL.clear (); mEqR.clear ();
+	mLatheOsL.clear (); mLatheOsR.clear ();
 	mPlayL.clear (); mPlayR.clear ();
 	mSpkL.clear (); mSpkR.clear ();
 	mHissShapeL.clear (); mHissShapeR.clear (); mHissShape2L.clear (); mHissShape2R.clear ();
@@ -932,7 +1087,7 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 		const double bump = warpBump (mTheta);
 		const double warpA = warp * kWarpMaxDepth * kWarpSigma / (kWarpSlopePeak * fr) * mFs;
 
-		double d = mBaseDelay
+		double d = mBaseDelay - mOsComp
 		         + wowA * std::sin (kTwoPi * mTheta + 0.3)
 		         + driftA * std::sin (kTwoPi * mDriftPhase)
 		         + wobble * (fl1 * std::sin (kTwoPi * mFlutterPhase1) + fl2 * std::sin (kTwoPi * mFlutterPhase2))
@@ -967,10 +1122,12 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 		wR = mEqR.process (wR);
 		{
 			// A gentle saturation, the lathe overloading: unity for small
-			// signals, softer at the top.
+			// signals, softer at the top - at 4x the rate, so its harmonics
+			// (a 10 kHz note's third is at 30 kHz) do not fold back.
 			const double dr = prof.drive;
-			wL = (1.0 - dr) * wL + dr * std::tanh (1.5 * wL) / 1.5;
-			wR = (1.0 - dr) * wR + dr * std::tanh (1.5 * wR) / 1.5;
+			auto lathe = [dr] (double v) { return latheCurve (v, dr); };
+			wL = mLatheOsL.process (wL, lathe);
+			wR = mLatheOsR.process (wR, lathe);
 			const double makeup = dbToGain (mMakeupDb);
 			wL *= makeup;
 			wR *= makeup;
