@@ -249,6 +249,15 @@ material comes out near unity). Surface alone at default dust: −42 dBFS RMS
 head never closer than 129 samples. Cost: 1.4 % of one VM core at 48 k with
 everything at 100 %.
 
+**Xcode 27 (24 Nov 2026).** After the macOS / Xcode 27.2 upgrade the configure
+failed with "No CMAKE_C_COMPILER could be found": the deployment target was
+10.13 and Xcode 27 accepts 12.0 – 27.2 only. `CMAKE_OSX_DEPLOYMENT_TARGET` is
+now **12.0** (above `project()`), and CMakeLists.txt raises Apple's
+AudioUnitSDK project from 11.0 to 12.0 on every configure (the AU target's
+nested PreBuild xcodebuild would fail otherwise; `external/` is never edited
+by hand). Worn Vinyl now needs **macOS 12.0 or later** — the first release
+notes must say so. A cache from before the change must go: `rm -rf build`.
+
 **On the Mac, first:**
 
 ```sh
