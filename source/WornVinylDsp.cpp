@@ -61,6 +61,90 @@ const Profile& playerProfile (int era, int disc, int player)
 	return player == kPlayerModern ? kModern : profileOf (era, disc);
 }
 
+//------------------------------------------------------------------------
+// The speakers
+//------------------------------------------------------------------------
+const char* speakerName (int speaker)
+{
+	static const char* const names[kSpeakerCount] = {
+		"Off", "1920s Horn", "1940s 2-inch", "1950s 3-inch", "1960s 6-inch + Tweeter", "1970s 3-Way"
+	};
+	return (speaker >= 0 && speaker < kSpeakerCount) ? names[speaker] : "";
+}
+
+const char* speakerDialName (int speaker)
+{
+	static const char* const names[kSpeakerCount] = { "OFF", "HORN", "2 IN", "3 IN", "6 IN", "3-WAY" };
+	return (speaker >= 0 && speaker < kSpeakerCount) ? names[speaker] : "";
+}
+
+const char* speakerDescription (int speaker)
+{
+	static const char* const names[kSpeakerCount] = {
+		"", "HORN GRAMOPHONE", "2-INCH SPEAKER", "3-INCH SPEAKER", "6-INCH + TWEETER", "HI-FI 3-WAY"
+	};
+	return (speaker >= 0 && speaker < kSpeakerCount) ? names[speaker] : "";
+}
+
+const SpeakerProfile& speakerProfile (int speaker)
+{
+	// hp1 Hz, Q   hp2 Hz, Q   lp1 Hz, Q   lp2 Hz, Q
+	// peaks: Hz x4, dB x4, Q x4
+	// cone Hz, k   amp drive   cabinet / horn: ms, feedback, loop low-pass Hz
+
+	// 1920s: a mica soundbox on a horn. The horn will not load below its
+	// cut-off (two steep high-passes), the soundbox rolls off past 4 kHz;
+	// the diaphragm rings at 1.5 and 2.8 kHz, the horn's throat at 700 Hz,
+	// and the sound runs back and forth down 55 cm of horn - the hollow,
+	// "down a tube" colour (a 3.2 ms echo, 310 Hz apart).
+	static const SpeakerProfile kHorn {
+		280.0, 1.2, 200.0, 0.707,   4200.0, 0.9, 5000.0, 0.707,
+		{ 700.0, 1500.0, 2800.0, 450.0 }, { 4.0, 5.0, 4.0, -3.0 }, { 2.5, 3.0, 3.0, 2.0 },
+		500.0, 1.2,   0.15,   3.2, 0.38, 2000.0 };
+
+	// 1940s: a 2-inch cone in a radio-gram's little box, a single valve.
+	// Resonance at ~420 Hz and nothing under it, a dip at 1.2 kHz and the
+	// cone breaking up at 2.9 and 4.2 kHz - shouty; the cone and the
+	// valve both give out when pushed. A small box's ring (0.6 ms).
+	static const SpeakerProfile k2Inch {
+		420.0, 1.6, 300.0, 0.707,   5000.0, 0.707, 6000.0, 1.0,
+		{ 1200.0, 2900.0, 4200.0, 0.0 }, { -2.0, 6.0, 3.0, 0.0 }, { 1.5, 2.5, 3.0, 1.0 },
+		600.0, 2.2,   0.35,   0.6, 0.18, 3000.0 };
+
+	// 1950s: a 3-inch cone in a portable's wooden case: a little lower,
+	// a little smoother, the case thumping softly at 180 Hz.
+	static const SpeakerProfile k3Inch {
+		300.0, 1.3, 200.0, 0.707,   6500.0, 0.707, 7500.0, 0.9,
+		{ 2400.0, 900.0, 4500.0, 180.0 }, { 4.0, -1.5, 2.0, 2.0 }, { 2.0, 1.2, 3.0, 2.0 },
+		450.0, 1.6,   0.25,   0.8, 0.15, 3500.0 };
+
+	// 1960s: a 6-inch cone and a small tweeter in an open-backed portable.
+	// Bass from ~110 Hz, the case booming at 150 Hz, the open back
+	// cancelling at 450 Hz, the cone's presence at 1.8 kHz and the little
+	// tweeter's sparkle at 6.5 kHz.
+	static const SpeakerProfile k6Inch {
+		110.0, 1.1, 70.0, 0.707,    12000.0, 0.707, 0.0, 0.707,
+		{ 150.0, 450.0, 1800.0, 6500.0 }, { 2.5, -2.0, 2.5, 3.5 }, { 1.5, 1.2, 1.4, 1.8 },
+		200.0, 1.2,   0.18,   1.5, 0.12, 2500.0 };
+
+	// 1970s: an 8-inch bass, a mid and a dome tweeter in a sealed box.
+	// 48 Hz - 19 kHz, a little bass warmth, the crossover's dip at 3 kHz,
+	// the tweeter a touch forward. The woofer barely compresses.
+	static const SpeakerProfile kHiFi {
+		48.0, 0.9, 0.0, 0.707,      19000.0, 0.707, 0.0, 0.707,
+		{ 65.0, 700.0, 3000.0, 10000.0 }, { 1.5, 0.8, -1.5, 1.5 }, { 1.2, 1.0, 2.0, 1.2 },
+		80.0, 0.6,   0.05,   0.0, 0.0, 0.0 };
+
+	switch (speaker)
+	{
+		case kSpeakerHorn:  return kHorn;
+		case kSpeaker2Inch: return k2Inch;
+		case kSpeaker3Inch: return k3Inch;
+		case kSpeaker6Inch: return k6Inch;
+		default:            return kHiFi;
+	}
+}
+
 const char* speedName (int speed)
 {
 	static const char* const names[kSpeedCount] = { "Auto", "33", "45", "78" };
@@ -218,6 +302,105 @@ double EraEq::magnitude (double fs, double hz) const
 }
 
 //------------------------------------------------------------------------
+// SpeakerChain
+//------------------------------------------------------------------------
+void SpeakerChain::allocate (double fs)
+{
+	uint32_t size = 1;
+	while (size < static_cast<uint32_t> (kMaxSpeakerCombMs * 0.001 * fs) + 4)
+		size <<= 1;
+	comb.assign (size, 0.0);
+	combMask = size - 1;
+	combCapacity = static_cast<int> (size) - 2;
+	combWrite = 0;
+}
+
+void SpeakerChain::design (const SpeakerProfile& p, double fs, double makeupDb)
+{
+	auto hp = [fs] (Biquad& b, double hz, double q) {
+		if (hz > 0.0) b.highPass (fs, hz, q); else b.setIdentity ();
+	};
+	auto lp = [fs] (Biquad& b, double hz, double q) {
+		if (hz > 0.0 && hz < 0.45 * fs) b.lowPass (fs, hz, q); else b.setIdentity ();
+	};
+	hp (hp1, p.hp1Hz, p.hp1Q);
+	hp (hp2, p.hp2Hz, p.hp2Q);
+	lp (lp1, p.lp1Hz, p.lp1Q);
+	lp (lp2, p.lp2Hz, p.lp2Q);
+	for (int i = 0; i < 4; ++i)
+		pk[i].peak (fs, std::min (p.pkHz[i], 0.4 * fs), p.pkDb[i], p.pkQ[i]);
+
+	ampDrive = p.ampDrive;
+	coneK = p.coneK;
+	coneCoef = p.coneHz > 0.0 ? 1.0 - std::exp (-kTwoPi * p.coneHz / fs) : 0.0;
+
+	// The echo, rounded to whole samples (a few cents off the horn's
+	// length at 44.1 k - inaudible), never longer than the buffer.
+	combDelay = std::min (combCapacity, static_cast<int> (std::lround (p.combMs * 0.001 * fs)));
+	combFeedback = combDelay > 0 ? p.combFeedback : 0.0;
+	combCoef = p.combLpHz > 0.0 ? 1.0 - std::exp (-kTwoPi * std::min (p.combLpHz, 0.45 * fs) / fs) : 1.0;
+
+	makeup = dbToGain (makeupDb);
+}
+
+void SpeakerChain::clear ()
+{
+	hp1.clear (); hp2.clear (); lp1.clear (); lp2.clear ();
+	for (auto& b : pk)
+		b.clear ();
+	coneLp = 0.0;
+	combLp = 0.0;
+	std::fill (comb.begin (), comb.end (), 0.0);
+	combWrite = 0;
+}
+
+double SpeakerChain::process (double x)
+{
+	// The amplifier: a soft clip, unity for small signals (the lathe's).
+	x = (1.0 - ampDrive) * x + ampDrive * std::tanh (1.5 * x) / 1.5;
+
+	// The cone: the band under its resonance moves it furthest, and that
+	// is what gives out first.
+	if (coneK > 0.0)
+	{
+		coneLp += coneCoef * (x - coneLp);
+		x += std::tanh (coneK * coneLp) / coneK - coneLp;
+	}
+
+	// The cone's (or the horn's) response.
+	x = lp2.process (lp1.process (hp2.process (hp1.process (x))));
+	for (auto& b : pk)
+		x = b.process (x);
+
+	// The cabinet, or the horn's length: an echo fed back, duller each
+	// time round.
+	if (combFeedback > 0.0)
+	{
+		combLp += combCoef * (comb[(combWrite - static_cast<uint32_t> (combDelay)) & combMask] - combLp);
+		x += combFeedback * combLp;
+		comb[combWrite & combMask] = x;
+		++combWrite;
+	}
+	return x * makeup;
+}
+
+double SpeakerChain::magnitude (double fs, double hz) const
+{
+	double m = hp1.magnitude (fs, hz) * hp2.magnitude (fs, hz) * lp1.magnitude (fs, hz) * lp2.magnitude (fs, hz);
+	for (const auto& b : pk)
+		m *= b.magnitude (fs, hz);
+	if (combFeedback > 0.0)
+	{
+		// y = x + g L(z) z^-D y, L the one-pole low-pass in the loop.
+		const std::complex<double> zi = std::polar (1.0, -kTwoPi * hz / fs);
+		const std::complex<double> L = combCoef / (1.0 - (1.0 - combCoef) * zi);
+		const std::complex<double> zD = std::polar (1.0, -kTwoPi * hz / fs * combDelay);
+		m *= 1.0 / std::abs (1.0 - combFeedback * L * zD);
+	}
+	return m;
+}
+
+//------------------------------------------------------------------------
 // Dsp
 //------------------------------------------------------------------------
 Dsp::Dsp ()
@@ -276,6 +459,9 @@ void Dsp::setSampleRate (double fs)
 
 	mWarpLpCoef = 1.0 - std::exp (-kTwoPi * 3000.0 / mFs);
 
+	mSpkL.allocate (mFs);
+	mSpkR.allocate (mFs);
+
 	designProfile ();
 	reset ();
 }
@@ -301,11 +487,48 @@ double Dsp::profileMakeupDb (const Profile& p) const
 }
 
 //------------------------------------------------------------------------
+double Dsp::speakerMakeup (const SpeakerProfile& p) const
+{
+	// As the era's: the speaker's mean power over 125 Hz - 4 kHz put back,
+	// capped - so switching speakers changes the colour, not the level
+	// (and a 2-inch's missing bass is not turned up to make up for it).
+	// NO ALLOCATION: this runs on the audio thread on a speaker change.
+	// The copy's echo buffer stays empty; only its length is read.
+	SpeakerChain c;
+	c.combCapacity = mSpkL.combCapacity;
+	c.design (p, mFs, 0.0);
+	double sum = 0.0;
+	int n = 0;
+	for (double f = 125.0; f <= 4001.0; f *= 1.2599210498948732)
+	{
+		const double m = c.magnitude (mFs, f);
+		sum += m * m;
+		++n;
+	}
+	return std::clamp (-10.0 * std::log10 (sum / n), -9.0, 9.0);
+}
+
+//------------------------------------------------------------------------
 void Dsp::designProfile ()
 {
 	mActiveEra = mEra;
 	mActiveDisc = mDisc;
 	mActivePlayer = mPlayer;
+	mActiveSpeaker = mSpeaker;
+
+	// The speaker. The UI thread's setSampleRate sized its echo; this
+	// only sets coefficients, so it is safe on the audio thread too.
+	if (mSpeaker != kSpeakerOff)
+	{
+		const SpeakerProfile& sp = speakerProfile (mSpeaker);
+		mSpeakerMakeupDb = speakerMakeup (sp);
+		mSpkL.design (sp, mFs, mSpeakerMakeupDb);
+		mSpkR.design (sp, mFs, mSpeakerMakeupDb);
+	}
+	else
+		mSpeakerMakeupDb = 0.0;
+	mSpkL.clear ();
+	mSpkR.clear ();
 	const int disc = effectiveDisc (mEra, mDisc);
 	const Profile& p = profileOf (mEra, disc);
 
@@ -387,6 +610,7 @@ void Dsp::reset ()
 		g.live = false;
 	mEqL.clear (); mEqR.clear ();
 	mPlayL.clear (); mPlayR.clear ();
+	mSpkL.clear (); mSpkR.clear ();
 	mHissShapeL.clear (); mHissShapeR.clear (); mHissShape2L.clear (); mHissShape2R.clear ();
 	mRumbleL.clear (); mRumbleR.clear ();
 	mWarpLpL = mWarpLpR = 0.0;
@@ -422,10 +646,18 @@ void Dsp::setPlayer (int player)
 	markIfChanged ();
 }
 
+void Dsp::setSpeaker (int speaker)
+{
+	// A new speaker fades like a new era: its filters' state on the old
+	// signal would thump.
+	mSpeaker = std::clamp (speaker, 0, kSpeakerCount - 1);
+	markIfChanged ();
+}
+
 void Dsp::markIfChanged ()
 {
 	if (mEra != mActiveEra || effectiveDisc (mEra, mDisc) != effectiveDisc (mActiveEra, mActiveDisc) ||
-	    mPlayer != mActivePlayer)
+	    mPlayer != mActivePlayer || mSpeaker != mActiveSpeaker)
 		mProfilePending = true;
 }
 
@@ -816,7 +1048,24 @@ void Dsp::process (const float* inL, const float* inR, float* outL, float* outR,
 			mWarpLpR = wR;
 		}
 
-		// An era or player change: the wet fades out, the chain swaps, in.
+		// ---- THE SPEAKER: what it all comes out of ------------------------------
+		// Off is no stage at all - not a flat filter - so the plug-in is
+		// bit-identical to before the switch. One cabinet sums to mono.
+		if (mActiveSpeaker != kSpeakerOff)
+		{
+			if (speakerIsMono (mActiveSpeaker))
+			{
+				wL = wR = mSpkL.process (0.5 * (wL + wR));
+			}
+			else
+			{
+				wL = mSpkL.process (wL);
+				wR = mSpkR.process (wR);
+			}
+		}
+
+		// An era, player or speaker change: the wet fades out, the chain
+		// swaps, in.
 		wL *= mProfileGain;
 		wR *= mProfileGain;
 

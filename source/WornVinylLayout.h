@@ -11,10 +11,11 @@
 //   RECORD      ERA (five positions), DISC (two - set by the era but in
 //               the 1950s) and SPEED (Auto / 33 / 45 / 78) side by side,
 //               then OUTPUT: Mix and Output
-//   TURNTABLE   PLAYER (Period / Modern) under it, and the OLED: the
-//               disc turning at its real speed, the
-//               scratches where the stylus meets them, the dust, the arm
-//               lifting over a warp; the SKIP lamp and a line under it
+//   TURNTABLE   the SKIP lamp in its title row; the OLED: the disc
+//               turning at its real speed, the scratches where the stylus
+//               meets them, the dust, the arm lifting over a warp; under
+//               it SPEAKER (Off + five, 24 Nov 2026) and PLAYER (Period /
+//               Modern), and a line under them
 //   SURFACE     Scratches, Dust, JUMPS
 //   SPEED       Wow, Flutter, Warp
 //
@@ -136,7 +137,8 @@ enum Tag
 	kTagEra = 0, kTagDisc = 1, kTagScratches = 2, kTagDust = 3, kTagWow = 4,
 	kTagFlutter = 5, kTagWarp = 6, kTagJumps = 7, kTagMix = 8, kTagOutput = 9,
 	kTagSpeed = 12,     // appended after the two outputs (10, 11)
-	kTagPlayer = 13
+	kTagPlayer = 13,
+	kTagSpeaker = 14
 };
 
 struct Control
@@ -161,6 +163,7 @@ constexpr Control kControls[] = {
 	{ kTagSpeed,     Kind::Selector, 0, { 160, 220, 288, 304 }, 40, 226, "SPEED" },
 	{ kTagMix,       Kind::Knob,     0, knobRect (96, 384, 52),  52, 96,  "MIX" },
 	{ kTagOutput,    Kind::Knob,     0, knobRect (216, 384, 52), 52, 216, "OUTPUT" },
+	{ kTagSpeaker,   Kind::Selector, 1, { 324, 400, 490, 480 }, 40, 410, "SPEAKER" },
 	{ kTagPlayer,    Kind::Selector, 1, { 494, 400, 630, 480 }, 40, 560, "PLAYER" },
 	{ kTagScratches, Kind::Knob,     2, knobRect (704, 112, 52), 52, 704, "SCRATCHES" },
 	{ kTagDust,      Kind::Knob,     2, knobRect (806, 112, 52), 52, 806, "DUST" },
@@ -180,9 +183,9 @@ inline const Control* controlFor (int tag)
 }
 
 //------------------------------------------------------------------------
-// The rotary selectors - two, three or five positions
+// The rotary selectors - two, three, four, five or six positions
 //------------------------------------------------------------------------
-constexpr int kMaxPositions = 5;
+constexpr int kMaxPositions = 6;
 
 /** A selector's geometry: its knob, where its positions point (degrees
     from twelve o'clock, clockwise), the radius its names hang from. */
@@ -200,13 +203,17 @@ inline Selector selectorOf (const Control& c, int positions)
 	s.radius = c.diameter / 2.0;
 	s.cx = c.centreX;
 	s.cy = c.r.top + kSelectorTopBand + s.radius;
-	s.labelRadius = s.radius + 12.0;
 	s.positions = positions < 2 ? 2 : (positions > kMaxPositions ? kMaxPositions : positions);
+	// Six names round a small knob crowd it: they hang a little further
+	// out, or the two near the top touch the knob's ticks.
+	s.labelRadius = s.radius + (s.positions == 6 ? 15.0 : 12.0);
 	static const double two[]   = { -45.0, 45.0 };
 	static const double three[] = { -45.0, 0.0, 45.0 };
 	static const double four[]  = { -90.0, -30.0, 30.0, 90.0 };
 	static const double five[]  = { -90.0, -45.0, 0.0, 45.0, 90.0 };
-	const double* a = s.positions == 2 ? two : s.positions == 3 ? three : s.positions == 4 ? four : five;
+	static const double six[]   = { -90.0, -54.0, -18.0, 18.0, 54.0, 90.0 };
+	const double* a = s.positions == 2 ? two : s.positions == 3 ? three : s.positions == 4 ? four
+	                : s.positions == 5 ? five : six;
 	for (int i = 0; i < s.positions; ++i)
 		s.angle[i] = a[i];
 	s.nameCentreY = c.r.bottom - kSelectorNameH / 2.0;
@@ -317,7 +324,7 @@ constexpr Rect kOutputTitle { 30, 362, 130, 374 };      // "OUTPUT", block style
 constexpr Rect kDiscNote    { 24, 308, 168, 320 };      // centred under DISC: "SET BY THE ERA" / "1950S - YOUR CHOICE"
 constexpr Rect kSurfaceNote { 664, 236, 976, 248 };     // fixed
 constexpr Rect kSpeedLine   { 664, 476, 976, 488 };     // changes with the disc's speed
-constexpr Rect kLamp        { 336, 412, 420, 432 };     // the SKIP lamp and its name
+constexpr Rect kLamp        { 536, 83, 620, 103 };      // the SKIP lamp, in TURNTABLE's title row (SPEAKER took its place)
 constexpr Rect kTurntableLine { 330, 482, 620, 494 };   // scratches and crackle
 
 constexpr const char* kSurfaceNoteText = "THE NEEDLE CAN JUMP ABOVE 60 % SCRATCHES";
@@ -357,13 +364,17 @@ inline std::string rpmText (int era, int disc, int speed)
 	return b;
 }
 
-/** The header: "1960S / STEREO VINYL / 33 RPM / 28 HZ - 15 KHZ / PERIOD PLAYER". */
-inline std::string headerLineText (int era, int disc, int speed, int player)
+/** The header: "1960S / STEREO VINYL / 33 RPM / 28 HZ - 15 KHZ / PERIOD PLAYER",
+    and " / 6-INCH + TWEETER" when a speaker is on. */
+inline std::string headerLineText (int era, int disc, int speed, int player, int speaker = kSpeakerOff)
 {
 	const int d = effectiveDisc (era, disc);
-	return upperCase (std::string (eraName (era)) + "  /  " + (isStereo (era) ? "STEREO " : "MONO ") +
-	                  discName (d) + "  /  " + rpmText (era, disc, speed) + "  /  " + bandwidthText (era, d) +
-	                  "  /  " + playerName (player) + " PLAYER");
+	std::string s = std::string (eraName (era)) + "  /  " + (isStereo (era) ? "STEREO " : "MONO ") +
+	                discName (d) + "  /  " + rpmText (era, disc, speed) + "  /  " + bandwidthText (era, d) +
+	                "  /  " + playerName (player) + " PLAYER";
+	if (speaker != kSpeakerOff)
+		s += std::string ("  /  ") + speakerDescription (speaker);
+	return upperCase (s);
 }
 
 inline std::string discNoteText (int era)

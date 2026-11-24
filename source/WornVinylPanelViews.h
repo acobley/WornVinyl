@@ -6,7 +6,7 @@
 // black knurled knobs with printed scales, chicken-head selectors, a
 // colour OLED, and every letter in Andy's 70s sci-fi lettering
 // (SciFiLettering.h). Knob and RotarySwitch are R2Synth's, without the
-// worn-panel marks; RotarySwitch has grown to five positions and can be
+// worn-panel marks; RotarySwitch has grown to six positions and can be
 // LOCKED to one (the Disc switch outside the 1950s).
 //
 //   Backdrop      everything that never changes, from WornVinylLayout.h

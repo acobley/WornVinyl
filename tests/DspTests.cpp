@@ -471,6 +471,191 @@ static void testPlayer ()
 }
 
 //------------------------------------------------------------------------
+/** A sine's level through `d` (dB re its input, from a least-squares fit
+    of the fundamental) and what is left over (THD + noise, % of it). */
+static void sineThrough (Dsp& d, double fs, double hz, double amp, double& gainDb, double& thdPct)
+{
+	auto in = sine (fs, hz, 1.0, amp);
+	std::vector<float> l, r;
+	run (d, in, in, l, r);
+	const size_t from = in.size () / 2;
+	const size_t n = static_cast<size_t> (std::floor ((in.size () - from) * hz / fs) * fs / hz);
+	double a = 0, b = 0, tot = 0;
+	for (size_t i = from; i < from + n; ++i)
+	{
+		const double t = 2 * kPi * hz * i / fs;
+		a += l[i] * std::sin (t); b += l[i] * std::cos (t); tot += double (l[i]) * l[i];
+	}
+	a *= 2.0 / n; b *= 2.0 / n;
+	const double fund = (a * a + b * b) / 2;
+	gainDb = 10 * std::log10 (fund / (amp * amp / 2) + 1e-30);
+	thdPct = 100 * std::sqrt (std::max (0.0, tot / n - fund) / (fund + 1e-30));
+}
+
+static void testSpeaker ()
+{
+	std::printf ("speaker: off is nothing, each one its own band, level and mono-ness\n");
+	const double fs = 48000;
+	auto fresh = [fs] (Dsp& d, int era, int speaker) {
+		d.setSampleRate (fs);
+		d.setEra (era);
+		d.setSpeaker (speaker);
+		clean (d);
+	};
+
+	// OFF IS NO STAGE: bit-identical to a Dsp never told about speakers,
+	// with every fault on.
+	{
+		auto in = sine (fs, 440, 2.0, 0.4);
+		std::vector<float> l1, r1, l2, r2;
+		Dsp a, b;
+		for (Dsp* d : { &a, &b })
+		{
+			d->setSampleRate (fs);
+			d->setScratchesPct (90); d->setDustPct (90); d->setWowPct (60); d->setWarpPct (40);
+		}
+		b.setSpeaker (kSpeakerOff);
+		a.snapParameters (); b.snapParameters ();
+		run (a, in, in, l1, r1);
+		run (b, in, in, l2, r2);
+		CHECK (l1 == l2 && r1 == r2, "speaker Off is bit-identical to before the switch");
+		Dsp c;
+		c.setSampleRate (fs);
+		c.setScratchesPct (90); c.setDustPct (90); c.setWowPct (60); c.setWarpPct (40);
+		c.setSpeaker (kSpeakerHiFi);
+		c.snapParameters ();
+		run (c, in, in, l2, r2);
+		CHECK (l1 != l2, "negative control: even the near-flat hi-fi changes the samples");
+	}
+
+	// THE BANDS, on a 1970s record (its own band nearly flat).
+	std::printf ("  response re 1 kHz (dB):     60 Hz  150 Hz  400 Hz  3 kHz  10 kHz   1 kHz level  make-up\n");
+	double at150[kSpeakerCount] = {}, at10k[kSpeakerCount] = {}, at60[kSpeakerCount] = {};
+	for (int spk = 0; spk < kSpeakerCount; ++spk)
+	{
+		double g1k, t, g[5];
+		const double hz[5] = { 60, 150, 400, 3000, 10000 };
+		Dsp d; fresh (d, kEra1970, spk); sineThrough (d, fs, 1000, 0.25, g1k, t);
+		for (int i = 0; i < 5; ++i)
+		{
+			Dsp e; fresh (e, kEra1970, spk); sineThrough (e, fs, hz[i], 0.05, g[i], t);
+			g[i] -= g1k;
+		}
+		at60[spk] = g[0]; at150[spk] = g[1]; at10k[spk] = g[4];
+		std::printf ("  %-24s %6.1f  %6.1f  %6.1f  %5.1f  %6.1f   %+6.1f dB   %+5.1f\n", speakerName (spk), g[0], g[1],
+		             g[2], g[3], g[4], g1k, d.speakerMakeupDb ());
+		CHECK (std::fabs (g1k) < 4.5, "%s: 1 kHz within 4.5 dB of unity (%.1f)", speakerName (spk), g1k);
+	}
+	CHECK (at150[kSpeakerHorn] < -15 && at10k[kSpeakerHorn] < -20, "the horn: no bass, no treble");
+	CHECK (at150[kSpeaker2Inch] < -15 && at10k[kSpeaker2Inch] < -20, "the 2-inch: no bass, no treble");
+	CHECK (at150[kSpeaker2Inch] < at150[kSpeaker3Inch] && at150[kSpeaker3Inch] < at150[kSpeaker6Inch],
+	       "bigger cones, more bass");
+	CHECK (at60[kSpeaker6Inch] < at60[kSpeakerHiFi] - 6.0,
+	       "the portable booms at 150 Hz, but only the hi-fi reaches 60");
+	CHECK (at10k[kSpeaker2Inch] < at10k[kSpeaker3Inch] && at10k[kSpeaker3Inch] < at10k[kSpeaker6Inch],
+	       "and more treble: the 1960s' tweeter");
+	CHECK (std::fabs (at60[kSpeakerHiFi]) < 3 && std::fabs (at150[kSpeakerHiFi]) < 3 && std::fabs (at10k[kSpeakerHiFi]) < 3,
+	       "the hi-fi: within 3 dB from 60 Hz to 10 kHz");
+	CHECK (at60[kSpeaker6Inch] < -6, "negative control: a 6-inch portable has no 60 Hz");
+
+	// THE CONE GIVES OUT: a loud 400 Hz.
+	double g, thdSmall, thdHiFi, thdQuiet;
+	{ Dsp d; fresh (d, kEra1970, kSpeaker2Inch); sineThrough (d, fs, 400, 0.9, g, thdSmall); }
+	{ Dsp d; fresh (d, kEra1970, kSpeakerHiFi);  sineThrough (d, fs, 400, 0.9, g, thdHiFi); }
+	{ Dsp d; fresh (d, kEra1970, kSpeaker2Inch); sineThrough (d, fs, 400, 0.02, g, thdQuiet); }
+	std::printf ("  400 Hz THD+N: 2-inch loud %.2f %%, quiet %.2f %%  |  hi-fi loud %.2f %%\n", thdSmall, thdQuiet, thdHiFi);
+	CHECK (thdSmall > 3.0 * thdHiFi, "pushed, the 2-inch distorts far more than the hi-fi");
+	CHECK (thdQuiet < 0.2 * thdSmall, "negative control: played quietly, it barely does");
+
+	// MONO: one cabinet sums. A left-only stereo record through each.
+	{
+		auto left = sine (fs, 500, 1.0, 0.3);
+		std::vector<float> right (left.size (), 0.0f), l, r;
+		for (int spk = kSpeakerHorn; spk < kSpeakerCount; ++spk)
+		{
+			Dsp d; fresh (d, kEra1970, spk);
+			run (d, left, right, l, r);
+			const bool same = std::memcmp (l.data (), r.data (), l.size () * sizeof (float)) == 0;
+			if (speakerIsMono (spk))
+				CHECK (same, "%s is one speaker: L == R", speakerName (spk));
+			else
+				CHECK (! same, "negative control: the hi-fi is a stereo pair");
+		}
+	}
+
+	// THE SURFACE comes out of it too: a 78 on a modern deck, through a horn.
+	{
+		auto treble = [] (const std::vector<float>& x) {
+			double s = 0;
+			for (size_t i = 1; i < x.size (); ++i) { const double d = double (x[i]) - x[i - 1]; s += d * d; }
+			return 10.0 * std::log10 (s / x.size () + 1e-30);
+		};
+		std::vector<float> silence (static_cast<size_t> (fs * 3), 0.0f), l, r;
+		double t[2];
+		for (int i = 0; i < 2; ++i)
+		{
+			Dsp d;
+			d.setSampleRate (fs);
+			d.setEra (kEra1920); d.setPlayer (kPlayerModern);
+			d.setSpeaker (i ? kSpeakerHorn : kSpeakerOff);
+			d.setDustPct (60); d.setScratchesPct (40);
+			d.snapParameters ();
+			run (d, silence, silence, l, r);
+			t[i] = treble (l);
+		}
+		std::printf ("  modern-deck 78 surface treble: line out %.1f dB, horn %.1f dB\n", t[0], t[1]);
+		CHECK (t[0] - t[1] > 6.0, "the crackle comes out of the horn dull (%.1f dB less treble)", t[0] - t[1]);
+	}
+
+	// A SPEAKER CHANGE fades rather than clicks.
+	{
+		Dsp d; fresh (d, kEra1960, kSpeakerOff);
+		auto s = sine (fs, 200, 0.5, 0.5);
+		std::vector<float> l, r;
+		run (d, s, s, l, r);
+		double step = 0;
+		for (int spk : { kSpeakerHorn, kSpeakerHiFi, kSpeaker2Inch, kSpeakerOff })
+		{
+			d.setSpeaker (spk);
+			run (d, s, s, l, r);
+			for (size_t i = 1; i < l.size (); ++i)
+				step = std::max (step, std::fabs (double (l[i]) - l[i - 1]));
+			CHECK (d.activeSpeaker () == spk, "the chain swapped to %s", speakerName (spk));
+		}
+		const double bound = 0.5 * 2 * kPi * 200 / fs * 3.0;
+		CHECK (step < bound, "speaker changes: biggest step %.4f < %.4f", step, bound);
+	}
+
+	// EVERY RATE: finite, about the same level, the horn's echo in range.
+	for (double rate : { 44100.0, 96000.0, 192000.0 })
+	{
+		Dsp d;
+		d.setSampleRate (rate);
+		d.setEra (kEra1970); d.setSpeaker (kSpeakerHorn);
+		clean (d);
+		auto in = sine (rate, 1000, 1.0, 0.25);
+		std::vector<float> l, r;
+		run (d, in, in, l, r);
+		bool finite = true;
+		for (float v : l) finite = finite && std::isfinite (v);
+		const double gain = rmsDb (l, in.size () / 2) - rmsDb (in, in.size () / 2);
+		CHECK (finite && std::fabs (gain) < 4.5, "the horn at %.0f Hz: finite, %.1f dB", rate, gain);
+	}
+
+	// Determinism: reset empties the cabinet's echo too.
+	{
+		Dsp d; fresh (d, kEra1920, kSpeakerHorn);
+		d.setDustPct (50); d.snapParameters ();
+		auto in = sine (fs, 300, 1.0, 0.5);
+		std::vector<float> l1, r1, l2, r2;
+		run (d, in, in, l1, r1);
+		d.reset ();
+		run (d, in, in, l2, r2);
+		CHECK (l1 == l2, "reset clears the horn: the same bounce twice");
+	}
+}
+
+//------------------------------------------------------------------------
 /** Run with a transport: playing or not, from a song position. */
 static void runTransport (Dsp& d, const std::vector<float>& in, std::vector<float>& out, bool playing,
                           int64_t& position, int block = 256)
@@ -677,6 +862,7 @@ static void testCost ()
 	Dsp d;
 	d.setSampleRate (fs);
 	d.setScratchesPct (100); d.setDustPct (100); d.setWowPct (100); d.setFlutterPct (100); d.setWarpPct (100);
+	d.setSpeaker (kSpeakerHiFi);   // the stereo pair: two speaker chains
 	d.snapParameters ();
 	std::vector<float> in (static_cast<size_t> (fs * 10), 0.1f), l, r;
 	const auto t0 = std::chrono::steady_clock::now ();
@@ -696,6 +882,7 @@ int main ()
 	testJumps ();
 	testSpeed ();
 	testPlayer ();
+	testSpeaker ();
 	testTransport ();
 	testMonoAndDeterminism ();
 	testSmoothingAndEdges ();

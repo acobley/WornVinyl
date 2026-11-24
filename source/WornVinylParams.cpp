@@ -30,14 +30,16 @@ const ParamDef kParams[kNumParams] =
 
 	{ kSpeed,       "Speed",      "",   ParamType::Enum,  0.0,          kSpeedCount - 1, kSpeedDefault,     0.0,          kSpeedCount - 1, kSpeedCount - 1 },
 	{ kPlayer,      "Player",     "",   ParamType::Enum,  0.0,          kPlayerCount - 1, kPlayerDefault,   0.0,          kPlayerCount - 1, kPlayerCount - 1 },
+	{ kSpeaker,     "Speaker",    "",   ParamType::Enum,  0.0,          kSpeakerCount - 1, kSpeakerDefault, 0.0,          kSpeakerCount - 1, kSpeakerCount - 1 },
 };
 
 //------------------------------------------------------------------------
 // The table is written by hand, so prove its shape at COMPILE time - a
 // row in the wrong place presents as "the Dust knob moves the wow".
 //------------------------------------------------------------------------
-static_assert (kNumParams == 14, "ten settings, two outputs, then Speed and Player (late settings)");
+static_assert (kNumParams == 15, "ten settings, two outputs, then Speed, Player and Speaker (late settings)");
 static_assert (! isOutputParam (kPlayer) && isLateSetting (kPlayer), "Player is a late setting");
+static_assert (! isOutputParam (kSpeaker) && isLateSetting (kSpeaker), "Speaker is a late setting");
 static_assert (! isOutputParam (kSpeed) && isLateSetting (kSpeed) && ! isLateSetting (kOutput),
                "Speed is a setting saved after the bypass, not an output");
 static_assert (kNumStoredParams == 10, "only the settings are saved");

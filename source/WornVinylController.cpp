@@ -133,15 +133,19 @@ tresult PLUGIN_API WornVinylController::setComponentState (IBStream* state)
 	if (streamer.readInt32 (bypass))
 		setParamNormalized (kBypass, bypass ? 1.0 : 0.0);
 
-	// The late settings, in the processor's order: Speed, Player.
+	// The late settings, in the processor's order: Speed, Player, Speaker.
 	setParamNormalized (kSpeed, kParams[kSpeed].defaultNormalized ());
 	setParamNormalized (kPlayer, kParams[kPlayer].defaultNormalized ());
+	setParamNormalized (kSpeaker, kParams[kSpeaker].defaultNormalized ());
 	int32 speed = 0;
 	if (streamer.readInt32 (speed) && speed >= 0 && speed < kSpeedCount)
 		setParamNormalized (kSpeed, kParams[kSpeed].toNormalized (speed));
 	int32 player = 0;
 	if (streamer.readInt32 (player) && player >= 0 && player < kPlayerCount)
 		setParamNormalized (kPlayer, kParams[kPlayer].toNormalized (player));
+	int32 speaker = 0;
+	if (streamer.readInt32 (speaker) && speaker >= 0 && speaker < kSpeakerCount)
+		setParamNormalized (kSpeaker, kParams[kSpeaker].toNormalized (speaker));
 
 	return kResultOk;
 }

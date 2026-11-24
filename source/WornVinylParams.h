@@ -62,6 +62,7 @@ enum Param : Steinberg::Vst::ParamID
 	//--------------------------------------------------------------------
 	kSpeed,         // 12  Auto / 33 / 45 / 78 rpm - how fast the disc turns
 	kPlayer,        // 13  Period / Modern - what the surface sounds like
+	kSpeaker,       // 14  Off / Horn / 2 in / 3 in / 6 in / 3-way - what it comes out of
 
 	kNumParams
 };
@@ -81,7 +82,7 @@ constexpr bool isOutputParam (Steinberg::Vst::ParamID id)
     the bypass, in id order. */
 constexpr bool isLateSetting (Steinberg::Vst::ParamID id)
 {
-	return id == kSpeed || id == kPlayer;
+	return id == kSpeed || id == kPlayer || id == kSpeaker;
 }
 
 /** The settings run from 0 to here and are saved; the outputs follow. */
@@ -169,6 +170,8 @@ inline const char* enumChoiceName (Steinberg::Vst::ParamID id, int choice)
 		return speedName (choice);
 	if (id == kPlayer)
 		return playerName (choice);
+	if (id == kSpeaker)
+		return speakerName (choice);
 	if (id == kJumps)
 		return choice == 0 ? "Off" : (choice == 1 ? "On" : "");
 	return "";

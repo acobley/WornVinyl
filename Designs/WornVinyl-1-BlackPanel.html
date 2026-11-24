@@ -22,7 +22,7 @@ add(`<rect y="${HDR - 2}" width="${W}" height="2" fill="#e9e6dc"/>`);
 for (const [x, y] of [[8, 8], [W - 8, 8], [8, H - 8], [W - 8, H - 8]])
   add(`<circle cx="${x}" cy="${y}" r="3.2" fill="#3a3a3a" stroke="#000" stroke-width=".6"/><line x1="${x - 2.2}" y1="${y - 2.2}" x2="${x + 2.2}" y2="${y + 2.2}" stroke="#222" stroke-width=".8"/>`);
 add(`<g id="wm"></g><rect x="300" y="16" width="1" height="24" fill="#5a5852"/>`);
-T('1960S  /  STEREO VINYL  /  33 RPM  /  28 HZ - 15 KHZ  /  PERIOD PLAYER', 314, 32, 10.5, INK, false);
+T('1960S  /  STEREO VINYL  /  33 RPM  /  28 HZ - 15 KHZ  /  PERIOD PLAYER  /  6-INCH + TWEETER', 314, 32, 10.5, INK, false);
 
 // ---- sections ----
 const sections = [
@@ -62,14 +62,15 @@ function knob(cx, top, d, value, label, reading) {
   T(reading, cx, top + d + 13, 10, INK, false, 'middle');
   T(label, cx, top + d + 26, 9.5, INK, true, 'middle');
 }
-// selector: names hang from radius+12 at their angles
+// selector: names hang from radius+12 at their angles (+15 for six, as Layout::selectorOf)
 function selector(cx, cy, d, names, angles, set, label, nameY, locked) {
+  const out = names.length == 6 ? 15 : 12;
   const r = d / 2;
   names.forEach((n, i) => {
     const t = angles[i], on = i == set;
     const a = fromTop(cx, cy, r + 2.5, t), b = fromTop(cx, cy, r + 8, t);
     add(`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${on ? RED : '#e9e6dc'}" stroke-width="${on ? 2 : 1.6}" stroke-linecap="round"/>`);
-    const p = fromTop(cx, cy, r + 12, t);
+    const p = fromTop(cx, cy, r + out, t);
     const col = on ? INK : DIM;
     if (Math.abs(t) < 10) T(n, p[0], p[1] - 4, 9.5, col, true, 'middle');
     else if (Math.abs(t) > 80) T(n, t < 0 ? p[0] - 2 : p[0] + 2, p[1] + 4, 9.5, col, true, t < 0 ? 'end' : 'start');
@@ -132,9 +133,10 @@ add(`<rect x="${st[0] - 7}" y="${st[1] - 4}" width="14" height="8" rx="1.5" fill
 T('33 RPM', SX + 10, SY + 17, 9.5, '#8d96a3', false);
 T('VINYL', SX + SW - 10, SY + SH - 9, 9.5, OLED, false, 'end');
 T('STEREO', SX + 10, SY + SH - 9, 9.5, '#8d96a3', false);
-// the skip lamp and the info line
-add(`<circle cx="344" cy="422" r="5" fill="#3a1512" stroke="#000"/>`);
-T('SKIP', 356, 426, 10.5);
+// the skip lamp (in the title row since SPEAKER took its place), the speaker, the player, the info line
+add(`<circle cx="544" cy="93" r="5" fill="#3a1512" stroke="#000"/>`);
+T('SKIP', 556, 97, 10.5);
+selector(410, 446, 40, ['OFF', 'HORN', '2 IN', '3 IN', '6 IN', '3-WAY'], [-90, -54, -18, 18, 54, 90], 4, 'SPEAKER', 478);
 selector(560, 446, 40, ['PERIOD', 'MODERN'], [-45, 45], 0, 'PLAYER', 478);
 T('4 SCRATCHES  /  CRACKLE 22 A SECOND', 330, 492, 8.5, SOFT, false);
 

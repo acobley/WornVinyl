@@ -7,6 +7,7 @@
 
 #include "WornVinylLayout.h"
 
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -43,7 +44,8 @@ Box box (const Rect& r) { return { double (r.left), double (r.top), double (r.ri
 
 int positionsOf (int tag)
 {
-	return tag == kTagEra ? kEraCount : (tag == kTagSpeed ? kSpeedCount : 2);   // Disc, Jumps, Player: two
+	return tag == kTagEra ? kEraCount : tag == kTagSpeed ? kSpeedCount : tag == kTagSpeaker ? kSpeakerCount
+	     : 2;   // Disc, Jumps, Player: two
 }
 std::string positionName (int tag, int i)
 {
@@ -59,6 +61,8 @@ std::string positionName (int tag, int i)
 		return i == kSpeedAuto ? "AUTO" : speedName (i);
 	if (tag == kTagPlayer)
 		return upperCase (playerName (i));
+	if (tag == kTagSpeaker)
+		return speakerDialName (i);
 	return i ? "ON" : "OFF";
 }
 
@@ -97,8 +101,8 @@ int main ()
 	}
 
 	std::printf ("controls\n");
-	CHECK (kNumControls == 12, "every setting has a control");
-	for (int tag : { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13 })
+	CHECK (kNumControls == 13, "every setting has a control");
+	for (int tag : { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14 })
 		CHECK (controlFor (tag) != nullptr, "tag %d is on the panel", tag);
 	CHECK (controlFor (10) == nullptr && controlFor (11) == nullptr, "the outputs have no control");
 	for (int i = 0; i < kNumControls; ++i)
@@ -162,11 +166,36 @@ int main ()
 		CHECK (s.radius >= kGrooveInner && s.radius <= kGrooveOuter && s.phase >= 0 && s.phase < 1, "speck %d on the grooves", i);
 	}
 	CHECK (specksShown (0) == 0 && specksShown (100) == kMaxSpecks, "specks follow Dust");
-	CHECK (inside (kLamp, tt) && kLamp.top > bezelOf (kScreen).bottom, "the lamp under the screen");
-	CHECK (controlFor (kTagPlayer)->r.top > bezelOf (kScreen).bottom && controlFor (kTagPlayer)->r.bottom <= kTurntableLine.top,
-	       "PLAYER between the screen and the line");
-	CHECK (! overlap (box (kLamp), box (controlFor (kTagPlayer)->r)), "the lamp clear of PLAYER");
-	CHECK (inside (kTurntableLine, tt) && kTurntableLine.top >= kLamp.bottom, "the line under the lamp");
+	{
+		// SKIP in TURNTABLE's title row, right of the title, above the glass.
+		const Box tb = titleBox (kSections[1]);
+		CHECK (inside (kLamp, tt) && kLamp.left > tb.right + 8 && kLamp.top >= tb.top - 2 && kLamp.bottom <= tb.bottom + 2,
+		       "the lamp in the title row");
+		CHECK (kLamp.bottom < bezelOf (kScreen).top, "the lamp above the screen");
+	}
+	for (int tag : { kTagSpeaker, kTagPlayer })
+	{
+		const Control* c = controlFor (tag);
+		CHECK (c->r.top > bezelOf (kScreen).bottom && c->r.bottom <= kTurntableLine.top,
+		       "%s between the screen and the line", c->label);
+		CHECK (! overlap (box (kLamp), box (c->r)), "the lamp clear of %s", c->label);
+	}
+	CHECK (inside (kTurntableLine, tt) && kTurntableLine.top >= controlFor (kTagSpeaker)->r.bottom, "the line under SPEAKER");
+	{
+		// NEGATIVE CONTROL: six names at the usual radius would touch the knob.
+		Control c = *controlFor (kTagSpeaker);
+		Selector s = selectorOf (c, kSpeakerCount);
+		s.labelRadius = s.radius + 12.0;
+		bool clash = false;
+		for (int p = 0; p < kSpeakerCount; ++p)
+		{
+			const Box b = selectorLabelBox (s, p, speakerDialName (p));
+			const double nx = std::fmax (b.left, std::fmin (s.cx, b.right));
+			const double ny = std::fmax (b.top, std::fmin (s.cy, b.bottom));
+			clash = clash || std::hypot (nx - s.cx, ny - s.cy) < s.radius + 8.0;
+		}
+		CHECK (clash, "negative control: six names at radius + 12 crowd the knob");
+	}
 	CHECK (14 + 20 + Lettering::width ("SKIP", kTextBlock) <= kLamp.width () + 14, "SKIP fits its lamp");
 	{
 		// The screen's captions, corner to corner.
@@ -181,10 +210,14 @@ int main ()
 		for (int d = 0; d < kDiscCount; ++d)
 		for (int sp = 0; sp < kSpeedCount; ++sp)
 		{
-			const std::string h = headerLineText (e, d, sp, sp % 2);
-			CHECK (allDrawable (h), "every character drawable: %s", h.c_str ());
-			if (Lettering::width (h, kTextHeader) > headerMax)
-				headerMax = Lettering::width (h, kTextHeader), headerLongest = h;
+			for (int pl = 0; pl < kPlayerCount; ++pl)
+				for (int spk = 0; spk < kSpeakerCount; ++spk)
+				{
+					const std::string h = headerLineText (e, d, sp, pl, spk);
+					CHECK (allDrawable (h), "every character drawable: %s", h.c_str ());
+					if (Lettering::width (h, kTextHeader) > headerMax)
+						headerMax = Lettering::width (h, kTextHeader), headerLongest = h;
+				}
 			for (double sc : { 0.0, 0.5, 100.0 })
 				for (double du : { 0.0, 100.0 })
 				{
@@ -203,6 +236,10 @@ int main ()
 	CHECK (speedMax <= kSpeedLine.width (), "the speed line fits");
 	CHECK (noteMax <= kDiscNote.width (), "the disc note fits");
 	CHECK (Lettering::width (kSurfaceNoteText, kTextNote) <= kSurfaceNote.width (), "the surface note fits");
+	CHECK (headerLineText (kEra1960, kDiscVinyl, kSpeedAuto, kPlayerPeriod, kSpeakerOff) ==
+	       headerLineText (kEra1960, kDiscVinyl, kSpeedAuto, kPlayerPeriod), "Off adds nothing to the header");
+	CHECK (headerLineText (kEra1960, kDiscVinyl, kSpeedAuto, kPlayerPeriod, kSpeaker6Inch).find ("6-INCH + TWEETER") !=
+	       std::string::npos, "a speaker is named in the header");
 	CHECK (rpmText (kEra1960, kDiscVinyl, kSpeedAuto) == "33 RPM" && rpmText (kEra1960, kDiscVinyl, kSpeed45) == "45 RPM" &&
 	       rpmText (kEra1920, kDiscVinyl, kSpeedAuto) == "78 RPM" && rpmText (kEra1920, kDiscVinyl, kSpeed33) == "33 RPM",
 	       "the rpm shown follows the switch, and Auto follows the disc");

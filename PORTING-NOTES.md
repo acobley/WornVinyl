@@ -85,11 +85,12 @@ Every row carries normalised, plain and internal ranges; internal == plain
 | 11 | Skipping | 0/1 | **output**, hidden: the SKIP lamp (latched in the controller) |
 | 12 | Speed | Auto / 33 / 45 / 78, default Auto | **appended 10 Nov 2026**, a late setting (after the outputs). Auto = the disc's own speed (78 shellac, 33⅓ vinyl). Moves only the motor: scratch ticks, wow rate, warp, a stuck groove's length. The music keeps its pitch and tempo (tested) |
 | 13 | Player | Period / Modern, default Period | **appended 10 Nov 2026**, a late setting saved after Speed. What the SURFACE sounds like: Period = the era's EQ again (dull crackle, how it sounded before), Modern = a 20 Hz – 20 kHz turntable (bright crackle over the old music). The music is bit-identical either way (tested) |
+| 14 | Speaker | Off / 1920s Horn / 1940s 2-inch / 1950s 3-inch / 1960s 6-inch + Tweeter / 1970s 3-Way, default Off | **appended 24 Nov 2026**, a late setting saved after Player. What the record is heard through — see §5a. Off is no stage at all, so it is bit-identical to before (tested) |
 | 1000 | Bypass | Off / On | through the DSP, so the latency holds |
 
 **State v1:** `int32 version`, ten `double` settings, `int32 bypass`, then
-`int32 speed`, `int32 player` (appended without a version bump, so an older
-build still opens a newer project; a stream without them is Auto / Period). A short
+`int32 speed`, `int32 player`, `int32 speaker` (appended without a version bump, so an older
+build still opens a newer project; a stream without them is Auto / Period / Off). A short
 stream resets what it omits to default; processor and controller read the
 same layout. `setState` (UI thread) parks the values and the audio thread
 takes them at the top of the next `process()` and snaps the smoothers — the
@@ -107,6 +108,7 @@ input → ring buffer ─(read: 12 ms + wow + drift + flutter + warp + jump offs
         vinyl: soft and dark), rumble (25 Hz), crackle grains (ticks, 10 % pops),
         scratch ticks - through the era EQ again (Period) or 20 Hz–20 kHz (Modern)
       → warp: HF loss and level dip at the high spot (the stylus lifting: both)
+      → THE SPEAKER (§5a): music and surface together; Off = no stage
       → Mix, Output, Bypass
 ```
 
@@ -157,6 +159,34 @@ the same passage gets the same scratches every time (tested bit-identical
 across different histories, and across a loop). A host with no
 ProcessContext: always turning, as before.
 
+## 5a. The speaker (24 Nov 2026)
+
+Last in the wet chain, so the music **and** the surface come out of it (a
+1920s surface on a Modern deck comes out of the horn 8 dB less bright —
+tested). Chosen freely, not tied to the era. Per channel:
+
+```
+amp soft clip (1−d)x + d·tanh(1.5x)/1.5 → cone excursion (the band under
+coneHz through tanh(kx)/k) → 2 HP + 2 LP + 4 peaks → cabinet / horn echo
+(fed back through a one-pole LP) → make-up (125 Hz–4 kHz mean power, ±9 dB)
+```
+
+| Speaker | Band (re 1 kHz, measured) | Character | Mono? |
+|---|---|---|---|
+| 1920s Horn | 150 Hz −20, 10 kHz −32 | soundbox peaks 700 / 1.5 k / 2.8 k; a 3.2 ms echo down the horn (310 Hz combs) | mono |
+| 1940s 2-inch | 150 Hz −27, 3 kHz **+9**, 10 kHz −23 | shouty break-up; cone and valve give out (400 Hz THD 6 % loud, 0.01 % quiet) | mono |
+| 1950s 3-inch | 150 Hz −14, 10 kHz −15 | smoother, a soft case thump at 180 Hz | mono |
+| 1960s 6-inch + tweeter | 60 Hz −12, 150 Hz +5, 10 kHz 0 | open-back portable: box boom, 450 Hz dip, tweeter sparkle at 6.5 k | mono |
+| 1970s 3-Way | ±2 dB 60 Hz–10 kHz | 8-inch sealed bass, 3 kHz crossover dip, dome tweeter | **stereo** |
+
+1 kHz level within 2.2 dB of the line out for all five. One cabinet sums to
+mono (a 1970s stereo LP on a Dansette is mono). A speaker change fades like
+an era change (8 ms out, swap, in). The echo buffer is sized in
+`setSampleRate`; `designProfile` (which can run on the audio thread)
+allocates nothing — `speakerMakeup` designs a copy that only reads the
+echo's length. Cost with the stereo 3-way and everything at 100 %: 0.7 % of
+a VM core.
+
 ## 6. Deliberate omissions, and the trap each one hides
 
 | Omitted | Why | What bites when it is undone |
@@ -177,9 +207,15 @@ MasterLoud in the entry file.
 
 ![The panel](Designs/WornVinyl-1-BlackPanel.png)
 
-1000 × 520 (480 until PLAYER needed room under the screen). `WornVinylLayout.h` (VSTGUI-free, read by the tests) has every
-rectangle, the selector geometry (now 2, 3, 4 or **5** positions — Era's are
-at −90/−45/0/45/90°, Speed's four at −90/−30/30/90°) and the readout formatters; `WornVinylPanelViews.*` has
+1000 × 520 (480 until PLAYER needed room under the screen). SPEAKER (24 Nov
+2026) sits left of PLAYER under the screen — a **6-position** selector
+(OFF · HORN · 2 IN · 3 IN · 6 IN · 3-WAY at −90/−54/−18/18/54/90°, names
+hung at radius + 15, not + 12, or the top two touch the ticks: a negative
+control proves it) — and the SKIP lamp moved up into TURNTABLE's title row
+to make room. The header line ends with the speaker ("/ 6-INCH + TWEETER")
+when one is on. `WornVinylLayout.h` (VSTGUI-free, read by the tests) has every
+rectangle, the selector geometry (2 to **6** positions — Era's are
+at −90/−45/0/45/90°, Speed's four at −90/−30/30/90°, Speaker's six above) and the readout formatters; `WornVinylPanelViews.*` has
 R2Synth's `Knob` and `RotarySwitch` (wear removed; the switch can be
 **locked**), plus `Turntable`, `Lamp`, `TextLine`, `Backdrop`.
 `SciFiLettering.h` is R2Synth's, namespace changed only. No bitmaps, no
@@ -194,12 +230,12 @@ needle is stuck. Era label colours are generic period colours, no company's.
 ## 8. Verification (VM, 10 Nov 2026)
 
 ```sh
-tools/run-tests.sh                       # DSP 119, Layout 605, Params 128 — 0 failed (with Speed, Player and the transport)
+tools/run-tests.sh                       # DSP 151, Layout 1102, Params 150 — 0 failed (24 Nov 2026, with Speaker)
 SDK=external/vst3sdk   # (in the VM: a clean 3.8.1_build_84 clone)
 for f in source/*.cpp; do
   g++ -c -std=c++17 -DLINUX=1 -DRELEASE=1 -I$SDK -I$SDK/vstgui4 -Isource -o /tmp/$(basename $f .cpp).o $f
 done
-nm -C /tmp/*.o | grep " U " | grep "WornVinyl::"   # all 39 defined in the objects
+nm -C /tmp/*.o | grep " U " | grep "WornVinyl::"   # all 43 defined in the objects (a weak `V` vtable counts as defined)
 ```
 
 Measured: default patch with a −12 dBFS 1 kHz sine → output peak **−9.1 dBFS**

@@ -57,7 +57,8 @@ int main ()
 	CHECK (int (Layout::kTagEra) == int (kEra) && int (Layout::kTagDisc) == int (kDisc) && int (Layout::kTagScratches) == int (kScratches) &&
 	       int (Layout::kTagDust) == int (kDust) && int (Layout::kTagWow) == int (kWow) && int (Layout::kTagFlutter) == int (kFlutter) &&
 	       int (Layout::kTagWarp) == int (kWarp) && int (Layout::kTagJumps) == int (kJumps) && int (Layout::kTagMix) == int (kMix) &&
-	       int (Layout::kTagOutput) == int (kOutput) && int (Layout::kTagSpeed) == int (kSpeed) && int (Layout::kTagPlayer) == int (kPlayer),
+	       int (Layout::kTagOutput) == int (kOutput) && int (Layout::kTagSpeed) == int (kSpeed) && int (Layout::kTagPlayer) == int (kPlayer) &&
+	       int (Layout::kTagSpeaker) == int (kSpeaker),
 	       "the layout's tags are the parameter ids");
 	CHECK (static_cast<int> (kParams[kSpeed].toInternal (kParams[kSpeed].defaultNormalized ())) == kSpeedAuto,
 	       "Speed defaults to Auto, so a project saved before it existed sounds the same");
@@ -65,6 +66,11 @@ int main ()
 	CHECK (static_cast<int> (kParams[kPlayer].toInternal (kParams[kPlayer].defaultNormalized ())) == kPlayerPeriod,
 	       "Player defaults to Period - how older projects sounded");
 	CHECK (isLateSetting (kPlayer) && kPlayer > kSpeed, "Player is saved after Speed");
+	CHECK (static_cast<int> (kParams[kSpeaker].toInternal (kParams[kSpeaker].defaultNormalized ())) == kSpeakerOff,
+	       "Speaker defaults to Off - how older projects sounded");
+	CHECK (isLateSetting (kSpeaker) && kSpeaker > kPlayer && kSpeaker == kNumParams - 1, "Speaker is saved after Player, last");
+	CHECK (std::strcmp (enumChoiceName (kSpeaker, kSpeakerHorn), "1920s Horn") == 0 &&
+	       std::strcmp (enumChoiceName (kSpeaker, kSpeakerHiFi), "1970s 3-Way") == 0, "the host's speaker names");
 	for (const auto& c : Layout::kControls)
 		CHECK (! isOutputParam (static_cast<Steinberg::Vst::ParamID> (c.tag)), "no control writes an output");
 

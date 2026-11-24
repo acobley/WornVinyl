@@ -123,6 +123,9 @@ void WornVinylEditor::build ()
 			// Speed's numbers are rpm; Auto is the disc's own speed.
 			if (id == kSpeed && choice == kSpeedAuto)
 				name = "AUTO";
+			// The speaker's dial is printed short: HORN, 2 IN ... 3-WAY.
+			if (id == kSpeaker)
+				name = speakerDialName (choice);
 			names.push_back (name);
 		}
 		sw->setNames (names);
@@ -189,12 +192,13 @@ void WornVinylEditor::refresh ()
 	const int disc = choice (kDisc);
 	const int speed = choice (kSpeed);
 	const int player = choice (kPlayer);
+	const int speaker = choice (kSpeaker);
 
 	// The Disc switch: the era decides, except in the 1950s.
 	if (mDiscSwitch)
 		mDiscSwitch->setLocked (discLocked (era) ? effectiveDisc (era, disc) : -1);
 
-	mHeaderLine->setText (Layout::headerLineText (era, disc, speed, player));
+	mHeaderLine->setText (Layout::headerLineText (era, disc, speed, player, speaker));
 	mDiscNote->setText (Layout::discNoteText (era));
 	mTurntableLine->setText (Layout::turntableLineText (era, disc, plain (kScratches), plain (kDust)));
 	mSpeedLine->setText (Layout::speedLineText (era, disc, speed));

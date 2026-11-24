@@ -15,6 +15,8 @@
 //            scratch ticks (Scratches), through the era's EQ again (Period)
 //            or a modern turntable's (Modern)
 //         -> the warp's HF loss and level dip (the stylus lifting: both)
+//         -> THE SPEAKER (Off, or one of five): what it all comes out of -
+//            its band, its cone or horn, its cabinet, its amplifier
 //         -> Mix against the dry signal (delayed by the same latency)
 //         -> Output
 //
@@ -97,6 +99,46 @@ constexpr int kPlayerDefault = kPlayerPeriod;
 const char* playerName (int player);   // "Period", "Modern"
 
 //------------------------------------------------------------------------
+/** THE SPEAKER SWITCH: what the record is heard through, at the very end
+    of the wet chain, so the music AND the surface come out of it. Off is
+    the line out (bit-identical to before the switch existed). The others
+    are the loudspeakers of five eras, chosen freely - a 1970s LP on a
+    wind-up's horn is allowed:
+
+      Horn   a 1920s hand-cranked gramophone: no electricity, a mica
+             soundbox and a horn - a band from ~250 Hz to ~4 kHz, the
+             soundbox's peaks, and the horn's echo down its own length
+      2 in   a 1940s radio-gram's tiny cone and valve amplifier: nothing
+             below ~400 Hz, a shouty cone break-up, the cone and the
+             valves both giving out when pushed
+      3 in   a 1950s portable: a little more bass, a little less shout
+      6 in   a 1960s portable with a small tweeter, open-backed: bass from
+             ~100 Hz, a boxy hump, the tweeter's sparkle on top
+      3-way  1970s hi-fi: an 8-inch bass, a mid and a tweeter in a sealed
+             box - nearly flat, 45 Hz - 19 kHz, a crossover dip at 3 kHz
+
+    The four single-cabinet players are MONO (summed, as a stereo record
+    on one speaker is); the hi-fi is a stereo pair. */
+enum Speaker
+{
+	kSpeakerOff,
+	kSpeakerHorn,
+	kSpeaker2Inch,
+	kSpeaker3Inch,
+	kSpeaker6Inch,
+	kSpeakerHiFi,
+	kSpeakerCount
+};
+constexpr int kSpeakerDefault = kSpeakerOff;
+
+const char* speakerName (int speaker);         // the host's: "Off", "1920s Horn", ... "1970s 3-Way"
+const char* speakerDialName (int speaker);     // the panel's: "OFF", "HORN", "2 IN", ... "3-WAY"
+const char* speakerDescription (int speaker);  // the header's: "", "HORN GRAMOPHONE", ... ("" for Off)
+
+/** One speaker in its cabinet - everything a single box sums to one. */
+constexpr bool speakerIsMono (int speaker) { return speaker >= kSpeakerHorn && speaker <= kSpeaker6Inch; }
+
+//------------------------------------------------------------------------
 /** THE SPEED SWITCH: Auto plays the disc at its own speed (78 shellac,
     33 1/3 vinyl); the others turn any disc at that speed - a 1960s 45
     single, a shellac 78 put on at 33. It sets how often the disc's faults
@@ -152,6 +194,29 @@ const Profile& playerProfile (int era, int disc, int player);
 
 /** "30 Hz - 15 kHz", from the profile - the header line and the tests. */
 std::string bandwidthText (int era, int disc);
+
+//------------------------------------------------------------------------
+/** A SPEAKER, as a recipe: its band and resonances (four filters and
+    four peaks, 0 Hz = not there), the cone's excursion (the band below
+    coneHz saturating, tanh (k x) / k - small for small signals, giving out
+    when pushed), the amplifier's soft clip (as the lathe's), and its
+    cabinet or horn: an echo `combMs` long fed back at `combFeedback`
+    through a low-pass (0 ms = none). */
+struct SpeakerProfile
+{
+	double hp1Hz, hp1Q, hp2Hz, hp2Q;
+	double lp1Hz, lp1Q, lp2Hz, lp2Q;
+	double pkHz[4], pkDb[4], pkQ[4];
+	double coneHz, coneK;
+	double ampDrive;
+	double combMs, combFeedback, combLpHz;
+};
+
+/** Off's profile is never used - Off bypasses the stage. */
+const SpeakerProfile& speakerProfile (int speaker);
+
+/** The longest cabinet echo any speaker has, so the delay is sized once. */
+constexpr double kMaxSpeakerCombMs = 4.0;
 
 //------------------------------------------------------------------------
 // Ranges - the parameter table reads these, so the host's range and the
@@ -262,6 +327,30 @@ struct EraEq
 };
 
 //------------------------------------------------------------------------
+/** A speaker on one channel: amp, cone, EQ, cabinet echo, make-up. */
+struct SpeakerChain
+{
+	Biquad hp1, hp2, lp1, lp2, pk[4];
+	double ampDrive = 0.0, coneK = 0.0, coneCoef = 0.0, coneLp = 0.0;
+	std::vector<double> comb;           // sized by allocate() only
+	uint32_t combMask = 0, combWrite = 0;
+	int combCapacity = 0;               // the longest echo the buffer holds
+	int combDelay = 0;
+	double combFeedback = 0.0, combCoef = 1.0, combLp = 0.0;
+	double makeup = 1.0;
+
+	/** The cabinet echo's buffer, for the longest echo at this rate. */
+	void allocate (double fs);
+	/** No allocation: the audio thread calls this on a speaker change. */
+	void design (const SpeakerProfile& p, double fs, double makeupDb);
+	void clear ();
+	double process (double x);
+
+	/** |H| of the linear part (filters and cabinet) - for the make-up. */
+	double magnitude (double fs, double hz) const;
+};
+
+//------------------------------------------------------------------------
 class Dsp
 {
 public:
@@ -283,6 +372,7 @@ public:
 	void setDisc (int disc);
 	void setSpeed (int speed);
 	void setPlayer (int player);
+	void setSpeaker (int speaker);
 	void setScratchesPct (double pct) { mScratches.target = clampPct (pct); }
 	void setDustPct (double pct)      { mDust.target = clampPct (pct); }
 	void setWowPct (double pct)       { mWow.target = clampPct (pct); }
@@ -336,7 +426,9 @@ public:
 	/** The smallest read delay since the last call, in samples. */
 	double takeMinReadDelay ();
 	double makeupDb () const { return mMakeupDb; }
+	double speakerMakeupDb () const { return mSpeakerMakeupDb; }
 	int jumpsTaken () const { return mJumpCount; }
+	int activeSpeaker () const { return mActiveSpeaker; }
 
 private:
 	struct Smooth
@@ -372,6 +464,7 @@ private:
 	void syncToSong (int64_t projectSample);
 	double readAt (const std::vector<float>& buf, double delay) const;
 	double profileMakeupDb (const Profile& p) const;
+	double speakerMakeup (const SpeakerProfile& p) const;
 
 	double mFs = 44100.0;
 	int mEra = kEraDefault;
@@ -379,6 +472,8 @@ private:
 	int mSpeed = kSpeedDefault;
 	int mPlayer = kPlayerDefault;
 	int mActivePlayer = kPlayerDefault;
+	int mSpeaker = kSpeakerDefault;
+	int mActiveSpeaker = kSpeakerDefault;
 
 	// the profile in use, and the one asked for (an era change fades out,
 	// swaps, fades in - a new EQ's state on the old signal would thump)
@@ -420,6 +515,8 @@ private:
 	EraEq mEqL, mEqR;           // the recording - the music
 	EraEq mPlayL, mPlayR;       // the player - the surface
 	double mMakeupDb = 0.0;
+	SpeakerChain mSpkL, mSpkR;  // the speaker - everything
+	double mSpeakerMakeupDb = 0.0;
 	double mWarpLpL = 0.0, mWarpLpR = 0.0, mWarpLpCoef = 1.0;
 	int mCoefCountdown = 0;
 };

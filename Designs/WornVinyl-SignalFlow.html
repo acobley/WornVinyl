@@ -244,7 +244,8 @@ function rbConvert(root = document.body) {
     { id: 'sat',  title: 'LATHE SATURATION', lines: ['(1−d)·x + d·tanh(1.5x)/1.5', 'd from 0.35 (1920s) to 0.08 (1970s)'], chips: ['ERA'] },
     { id: 'make', title: 'MAKE-UP GAIN', lines: ['the EQ’s lost level put back', '(−3 to +9 dB)'] },
     { id: 'sum',  sum: true },
-    { id: 'warp', title: 'WARP LIFT', lines: ['the stylus lifting: treble loss and', 'up to −2.5 dB, music and surface', '8 ms fade on an era or player change'], chips: ['WARP'], theta: true },
+    { id: 'warp', title: 'WARP LIFT', lines: ['the stylus lifting: treble loss and', 'up to −2.5 dB, music and surface'], chips: ['WARP'], theta: true },
+    { id: 'spk',  title: 'SPEAKER', lines: ['Off: no stage at all (the line out)', 'horn · 2 in · 3 in · 6 in + tweeter · 3-way', 'amp clip → cone excursion → its band', '→ cabinet / horn echo → make-up', 'one cabinet sums to mono; 3-way stereo', '8 ms fade when the chain changes'], chips: ['SPEAKER'] },
     { id: 'mix',  title: 'MIX', lines: ['dry ↔ wet'], chips: ['MIX'] },
     { id: 'out',  title: 'OUTPUT', lines: ['−12 to +12 dB'], chips: ['OUTPUT'] },
     { id: 'byp',  title: 'BYPASS', lines: ['crossfade to the dry tap · latency holds'], chips: ['HOST'] },
@@ -290,7 +291,7 @@ function rbConvert(root = document.body) {
   path([[N.sat.cx, N.sat.bottom], [N.make.cx, N.make.y]], 'audio');
   path([[N.make.cx, N.make.bottom], [N.sum.cx, N.sum.cy - N.sum.r]], 'audio');
   path([[N.sum.cx, N.sum.cy + N.sum.r], [N.warp.cx, N.warp.y]], 'audio');
-  const rest = ['warp', 'mix', 'out', 'byp', 'end'];
+  const rest = ['warp', 'spk', 'mix', 'out', 'byp', 'end'];
   for (let i = 0; i + 1 < rest.length; i++)
     path([[N[rest[i]].cx, N[rest[i]].bottom], [N[rest[i + 1]].cx, N[rest[i + 1]].y]], 'audio');
 
