@@ -3,7 +3,7 @@
 Your track played back off a worn record. A stereo effect, VST3 and Audio
 Unit, for macOS.
 
-![The panel](Designs/WornVinyl-1-BlackPanel.png)
+![The panel](docs/panel.png)
 
 ## What it is
 
@@ -72,6 +72,7 @@ If a configure fails after an Xcode upgrade, delete `build/` and run
 
 ```sh
 tools/run-tests.sh            # the DSP, layout and parameter suites; no build needed
+python3 tools/render-panel.py # redraws docs/panel.png from the code the editor runs
 ```
 
 The DSP suite builds with nothing but a C++ compiler. It measures every era,

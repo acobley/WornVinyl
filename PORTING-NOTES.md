@@ -221,6 +221,16 @@ R2Synth's `Knob` and `RotarySwitch` (wear removed; the switch can be
 `SciFiLettering.h` is R2Synth's, namespace changed only. No bitmaps, no
 system font. In public material: "70s sci-fi lettering" only.
 
+**`docs/panel.png`** (24 Nov 2026) is drawn by `tools/render-panel.py`, as
+R2Synth's is: `tools/dump-layout.cpp` compiles against `WornVinylLayout.h`,
+`WornVinylParams.cpp` and `WornVinylDsp.cpp` and prints the panel at its
+defaults as JSON (positions, text, the scratches and specks at disc angle 0,
+every glyph), and the script only draws. What a selector prints
+(`positionName`), what a knob reads (`knobReadout`) and the era's label
+colours (`eraLabelColour`) moved into `WornVinylLayout.h` for it, so the
+editor, the tests and the picture read one copy. Needs Pillow and the SDK
+headers. `Designs/WornVinyl-1-BlackPanel.png` stays as the design mock-up.
+
 The **turntable screen** turns the disc to the published `Disc Angle`; the
 label marks show it turning; scratches are drawn at `scratchSlot` phases
 and pass under the stylus exactly when they tick; specks follow Dust; the
@@ -230,7 +240,7 @@ needle is stuck. Era label colours are generic period colours, no company's.
 ## 8. Verification (VM, 10 Nov 2026)
 
 ```sh
-tools/run-tests.sh                       # DSP 151, Layout 1102, Params 150 — 0 failed (24 Nov 2026, with Speaker)
+tools/run-tests.sh                       # DSP 151, Layout 1104, Params 156 — 0 failed (24 Nov 2026)
 SDK=external/vst3sdk   # (in the VM: a clean 3.8.1_build_84 clone)
 for f in source/*.cpp; do
   g++ -c -std=c++17 -DLINUX=1 -DRELEASE=1 -I$SDK -I$SDK/vstgui4 -Isource -o /tmp/$(basename $f .cpp).o $f

@@ -115,18 +115,12 @@ const std::vector<Lettering::Command>& commandsOf (const Lettering::Glyph& glyph
 	return it->second;
 }
 
-/** Each era's label colour on the screen - a nod to the labels of the
-    day, not any one company's. */
+/** Each era's label colour on the screen: Layout::eraLabelColour, which
+    tools/render-panel.py reads too. */
 CColor labelColour (int era)
 {
-	switch (era)
-	{
-		case kEra1920: return CColor (122, 28, 28, 255);    // oxblood
-		case kEra1940: return CColor ( 34, 30, 22, 255);    // black and gold
-		case kEra1950: return CColor (107, 31, 58, 255);    // maroon
-		case kEra1970: return CColor (205, 98, 26, 255);    // orange
-		default:       return CColor ( 29, 63, 143, 255);   // the 1960s: blue
-	}
+	const Layout::Rgb c = Layout::eraLabelColour (era);
+	return CColor (static_cast<uint8_t> (c.r), static_cast<uint8_t> (c.g), static_cast<uint8_t> (c.b), 255);
 }
 
 } // anonymous namespace
@@ -656,7 +650,8 @@ void Turntable::draw (CDrawContext* context)
 	// ---- the label, turning: two marks show it -------------------------------
 	fillCircle (context, disc, kLabelR, labelColour (mEra));
 	if (mEra == kEra1940)
-		strokeCircle (context, disc, kLabelR - 5.0, CColor (201, 162, 74, 255), 1.0);
+		strokeCircle (context, disc, kLabelR - 5.0,
+		              CColor (kLabelGoldRing.r, kLabelGoldRing.g, kLabelGoldRing.b, 255), 1.0);
 	strokeCircle (context, disc, kLabelR, Palette::kOled, 1.2);
 	for (double off : { 0.0, 180.0 })
 	{

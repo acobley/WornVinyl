@@ -356,6 +356,59 @@ inline std::string upperCase (std::string s)
 	return s;
 }
 
+/** WHAT A SELECTOR'S POSITION IS PRINTED AS - the editor, the tests and
+    tools/render-panel.py all ask here. The era's read 1920 ... 1970 (not
+    "1920S"), Speed's Auto is AUTO, the speaker's are short (HORN, 2 IN). */
+inline std::string positionName (int tag, int choice)
+{
+	switch (tag)
+	{
+		case kTagEra:
+		{
+			std::string s = eraName (choice);
+			if (! s.empty () && s.back () == 's')
+				s.pop_back ();
+			return s;
+		}
+		case kTagDisc:    return upperCase (discName (choice));
+		case kTagSpeed:   return choice == kSpeedAuto ? "AUTO" : speedName (choice);
+		case kTagPlayer:  return upperCase (playerName (choice));
+		case kTagSpeaker: return speakerDialName (choice);
+		default:          return choice ? "ON" : "OFF";   // Jumps
+	}
+}
+
+/** How many positions a selector has. */
+inline int positionCount (int tag)
+{
+	return tag == kTagEra ? kEraCount : tag == kTagSpeed ? kSpeedCount : tag == kTagSpeaker ? kSpeakerCount : 2;
+}
+
+/** WHAT A KNOB READS, from its plain value: Output in dB, Mix in %,
+    the rest in % with OFF at zero. */
+inline std::string knobReadout (int tag, double plain)
+{
+	if (tag == kTagOutput)
+		return decibelText (plain);
+	return percentText (plain, tag != kTagMix);
+}
+
+/** The colour of each era's record label on the screen - a nod to the
+    labels of the day, not any one company's. The 1940s' has a gold ring. */
+struct Rgb { int r, g, b; };
+inline Rgb eraLabelColour (int era)
+{
+	switch (era)
+	{
+		case kEra1920: return { 122, 28, 28 };    // oxblood
+		case kEra1940: return { 34, 30, 22 };     // black and gold
+		case kEra1950: return { 107, 31, 58 };    // maroon
+		case kEra1970: return { 205, 98, 26 };    // orange
+		default:       return { 29, 63, 143 };    // the 1960s: blue
+	}
+}
+constexpr Rgb kLabelGoldRing { 201, 162, 74 };
+
 /** "33 RPM", "45 RPM", "78 RPM" - the speed the disc turns at. */
 inline std::string rpmText (int era, int disc, int speed)
 {

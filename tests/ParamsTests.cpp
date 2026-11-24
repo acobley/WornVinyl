@@ -72,7 +72,12 @@ int main ()
 	CHECK (std::strcmp (enumChoiceName (kSpeaker, kSpeakerHorn), "1920s Horn") == 0 &&
 	       std::strcmp (enumChoiceName (kSpeaker, kSpeakerHiFi), "1970s 3-Way") == 0, "the host's speaker names");
 	for (const auto& c : Layout::kControls)
+	{
 		CHECK (! isOutputParam (static_cast<Steinberg::Vst::ParamID> (c.tag)), "no control writes an output");
+		if (c.kind == Layout::Kind::Selector)
+			CHECK (Layout::positionCount (c.tag) == kParams[c.tag].stepCount + 1,
+			       "%s: the panel prints as many positions as the parameter has", c.label);
+	}
 
 	CHECK (&paramDef (kBypass) == &kParams[kOutput], "an unknown id never indexes past the table");
 	CHECK (! isTableParam (kBypass), "bypass is not a table id");

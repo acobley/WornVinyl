@@ -99,35 +99,19 @@ void WornVinylEditor::build ()
 		{
 			auto* k = new Knob (toCRect (c.r), this, static_cast<int32_t> (id), c.diameter);
 			k->setLabel (c.label);
-			if (id == kOutput)
-				k->setFormatter ([] (float n) { return Layout::decibelText (kParams[kOutput].toPlain (n)); });
-			else
-			{
-				const bool offAtZero = (id != kMix);
-				k->setFormatter ([id, offAtZero] (float n) {
-					return Layout::percentText (kParams[id].toPlain (n), offAtZero);
-				});
-			}
+			k->setFormatter ([id] (float n) {
+				return Layout::knobReadout (static_cast<int> (id), kParams[id].toPlain (n));
+			});
 			add (k, id);
 			continue;
 		}
 
 		auto* sw = new RotarySwitch (toCRect (c.r), this, static_cast<int32_t> (id), c);
 		std::vector<std::string> names;
+		// What each position is printed as: Layout::positionName, which
+		// the tests and tools/render-panel.py read too.
 		for (int choice = 0; choice <= static_cast<int> (kParams[id].plainMax); ++choice)
-		{
-			// The era's positions read 1920 ... 1970, not "1920S".
-			std::string name = enumChoiceName (id, choice);
-			if (id == kEra && ! name.empty () && name.back () == 's')
-				name.pop_back ();
-			// Speed's numbers are rpm; Auto is the disc's own speed.
-			if (id == kSpeed && choice == kSpeedAuto)
-				name = "AUTO";
-			// The speaker's dial is printed short: HORN, 2 IN ... 3-WAY.
-			if (id == kSpeaker)
-				name = speakerDialName (choice);
-			names.push_back (name);
-		}
+			names.push_back (Layout::positionName (c.tag, choice));
 		sw->setNames (names);
 		sw->setLabel (c.label);
 		add (sw, id);

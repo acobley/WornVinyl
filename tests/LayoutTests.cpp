@@ -42,29 +42,7 @@ bool overlap (const Box& a, const Box& b)
 }
 Box box (const Rect& r) { return { double (r.left), double (r.top), double (r.right), double (r.bottom) }; }
 
-int positionsOf (int tag)
-{
-	return tag == kTagEra ? kEraCount : tag == kTagSpeed ? kSpeedCount : tag == kTagSpeaker ? kSpeakerCount
-	     : 2;   // Disc, Jumps, Player: two
-}
-std::string positionName (int tag, int i)
-{
-	if (tag == kTagEra)
-	{
-		std::string s = eraName (i);
-		s.pop_back ();
-		return s;
-	}
-	if (tag == kTagDisc)
-		return upperCase (discName (i));
-	if (tag == kTagSpeed)
-		return i == kSpeedAuto ? "AUTO" : speedName (i);
-	if (tag == kTagPlayer)
-		return upperCase (playerName (i));
-	if (tag == kTagSpeaker)
-		return speakerDialName (i);
-	return i ? "ON" : "OFF";
-}
+int positionsOf (int tag) { return positionCount (tag); }
 
 /** Every character in `s` has a glyph (or is a space). */
 bool allDrawable (const std::string& s)
@@ -236,6 +214,12 @@ int main ()
 	CHECK (speedMax <= kSpeedLine.width (), "the speed line fits");
 	CHECK (noteMax <= kDiscNote.width (), "the disc note fits");
 	CHECK (Lettering::width (kSurfaceNoteText, kTextNote) <= kSurfaceNote.width (), "the surface note fits");
+	CHECK (positionName (kTagEra, kEra1920) == "1920" && positionName (kTagDisc, kDiscShellac) == "SHELLAC" &&
+	       positionName (kTagSpeed, kSpeedAuto) == "AUTO" && positionName (kTagSpeed, kSpeed45) == "45" &&
+	       positionName (kTagPlayer, kPlayerModern) == "MODERN" && positionName (kTagSpeaker, kSpeakerHorn) == "HORN" &&
+	       positionName (kTagJumps, 1) == "ON", "the names printed round the selectors");
+	CHECK (knobReadout (kTagOutput, 0.0) == "+0.0 DB" && knobReadout (kTagMix, 0.0) == "0 %" &&
+	       knobReadout (kTagDust, 0.0) == "OFF" && knobReadout (kTagDust, 30.0) == "30 %", "the knobs' readings");
 	CHECK (headerLineText (kEra1960, kDiscVinyl, kSpeedAuto, kPlayerPeriod, kSpeakerOff) ==
 	       headerLineText (kEra1960, kDiscVinyl, kSpeedAuto, kPlayerPeriod), "Off adds nothing to the header");
 	CHECK (headerLineText (kEra1960, kDiscVinyl, kSpeedAuto, kPlayerPeriod, kSpeaker6Inch).find ("6-INCH + TWEETER") !=
