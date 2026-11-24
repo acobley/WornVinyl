@@ -1,7 +1,8 @@
 # Worn Vinyl 1.0.0.0
 
 Your track played back off a worn record. A stereo effect for macOS, as a
-**VST3** and an **Audio Unit**. The first release.
+**VST3** and an **Audio Unit**. Free software under the GNU GPL, version 3 or
+later. The first release.
 
 ## What it is
 
@@ -71,5 +72,5 @@ SHA-256: <paste from: shasum -a 256 installer/WornVinyl-1.0.0.0.pkg>
 
 ---
 
-Copyright 2026 A. E. Cobley. CC BY-SA 4.0.
+Copyright 2026 A. E. Cobley. GNU GPL v3 or later; see `LICENSE` and `NOTICE.md`.
 VST is a registered trademark of Steinberg Media Technologies GmbH.

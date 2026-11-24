@@ -33,5 +33,5 @@
 // /Library/Audio/Presets/<it>/<plug-in>, and REAPER cuts an AU name at the
 // first full stop.
 #define stringCompanyName    "AE Cobley"
-#define stringLegalCopyright "Copyright 2026 A. E. Cobley - CC BY-SA 4.0"
+#define stringLegalCopyright "Copyright 2026 A. E. Cobley - GPL-3.0-or-later"
 #define stringLegalTrademarks "VST is a trademark of Steinberg Media Technologies GmbH"

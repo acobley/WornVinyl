@@ -325,7 +325,9 @@ installer/publish-release.sh            # checksum into the notes, push, tag the
 `installer/README.md` is the walkthrough (certificates, notary profile, the
 dead-AU symlink trap, Gatekeeper). Differences from R2Synth: MasterLoud's
 rule that the licence pane appears only when there is a `LICENSE` file -
-there is none yet, though `version.h` says CC BY-SA 4.0; no presets, so that
+there is now: **GPL v3 or later** (24 Nov 2026, as R2Synth; `NOTICE.md` has
+the section 7(e) name term, the third-party licences and the credits;
+`version.h` said CC BY-SA 4.0 until then); no presets, so that
 component is dropped (the distribution trimmed of both was checked
 well-formed with exactly the VST3 and AU pkg-refs). `tools/check-versions.py`
 came with it. `tools/run-tests.sh` now also runs it and the release scripts'

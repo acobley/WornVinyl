@@ -78,3 +78,9 @@ python3 tools/render-panel.py # redraws docs/panel.png from the code the editor 
 The DSP suite builds with nothing but a C++ compiler. It measures every era,
 speaker and fault before any plug-in is built. See `PORTING-NOTES.md` for
 what was measured, what was decided, and why.
+
+## Licence
+
+Free software under the GNU GPL, version 3 or later: see `LICENSE`, and
+`NOTICE.md` for the third-party components and one additional term (a
+modified version must not be called Worn Vinyl).

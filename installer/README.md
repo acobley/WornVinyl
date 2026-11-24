@@ -551,12 +551,10 @@ it, silently. This is the last cheap moment to be sure.
 
   (`-fdebug-prefix-map` will *not* do this — it rewrites debug info and leaves
   `__FILE__` alone.)
-* **The licence starts binding other people.** CC BY-SA 4.0 is what
-  `source/version.h` says, though there is no `LICENSE` file yet (so the
-  installer has no licence pane until there is); Creative Commons themselves advise against CC
-  licences for software, since the terms are written for creative works and
-  carry no patent grant. Worth a decision before the first download rather than
-  after.
+* **The licence starts binding other people.** Worn Vinyl is GPL v3 or
+  later (`LICENSE`, and `NOTICE.md` for the section 7 name term and the
+  third-party components); the installer shows `LICENSE` as its licence pane.
+  Once someone has a copy under those terms, they keep them.
 
 ## If it fails on someone else's Mac
 

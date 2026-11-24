@@ -344,9 +344,9 @@ sed "s/__VERSION__/$VERSION/g" "$HERE/distribution.xml" > "$WORK/distribution.xm
 
 # THE LICENCE PANE, only if there is a LICENSE to show (MasterLoud's rule).
 # A <license> element naming a file that is not in the resources is another
-# thing Installer fails on at the page stage. Worn Vinyl has no LICENSE file
-# yet (version.h says CC BY-SA 4.0); add one at the repo root and the pane
-# appears.
+# thing Installer fails on at the page stage. Worn Vinyl's is the GPL v3
+# (LICENSE at the repo root), so the pane is there; the rule stays for a
+# checkout without it.
 if [ -f "$ROOT/LICENSE" ]; then
     cp "$ROOT/LICENSE" "$WORK/resources/license.txt"
 else
