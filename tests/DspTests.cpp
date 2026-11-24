@@ -196,6 +196,106 @@ static void testLatencyAndDry ()
 }
 
 //------------------------------------------------------------------------
+/** WHEN EACH BURST CAME OUT: 64-sample noise bursts every `spacing`
+    samples, each found by cross-correlation within +/- `window` of the
+    reported latency, to a fraction of a sample (parabolic peak). This is
+    what a host's latency test does - one burst of it. */
+static std::vector<double> burstDelays (Dsp& d, double fs, double seconds, int spacing, int window)
+{
+	const int lat = d.latencySamples ();
+	const size_t n = static_cast<size_t> (fs * seconds);
+	std::vector<float> in (n, 0.0f), l, r;
+	uint32_t s = 12345;
+	std::vector<size_t> starts;
+	for (size_t at = static_cast<size_t> (spacing); at + spacing < n; at += static_cast<size_t> (spacing))
+	{
+		starts.push_back (at);
+		for (int i = 0; i < 64; ++i)
+		{
+			s = s * 1664525u + 1013904223u;
+			in[at + i] = static_cast<float> (((s >> 8) / 16777216.0 - 0.5) * 0.8);
+		}
+	}
+	run (d, in, in, l, r);
+	std::vector<double> out;
+	for (size_t at : starts)
+	{
+		std::vector<double> c (static_cast<size_t> (2 * window + 1));
+		int best = 0;
+		for (int k = -window; k <= window; ++k)
+		{
+			double a = 0;
+			for (int i = 0; i < 64; ++i)
+				a += double (in[at + i]) * l[at + i + lat + k];
+			c[static_cast<size_t> (k + window)] = a;
+			if (a > c[static_cast<size_t> (best + window)])
+				best = k;
+		}
+		const size_t b = static_cast<size_t> (best + window);
+		double frac = 0.0;
+		if (b > 0 && b + 1 < c.size ())
+		{
+			const double den = c[b - 1] - 2 * c[b] + c[b + 1];
+			frac = den != 0.0 ? 0.5 * (c[b - 1] - c[b + 1]) / den : 0.0;
+		}
+		out.push_back (lat + best + frac);
+	}
+	return out;
+}
+
+static void testMeasuredLatency ()
+{
+	std::printf ("latency, measured as a host measures it\n");
+
+	// STILL: no wow, flutter or warp - the read head rests at the latency,
+	// and every burst comes out on it. What is left is the era EQ's own
+	// group delay: the 1960s' 4-pole low-pass at 15 kHz delays by ~0.03 ms
+	// (1.3 samples at 48 k, 3 at 96 k) - a filter's delay, which no plug-in
+	// reports. So the tolerance is in TIME: 0.05 ms.
+	double still48 = 0.0;
+	for (double fs : { 44100.0, 48000.0, 96000.0 })
+	{
+		Dsp d;
+		d.setSampleRate (fs);
+		clean (d);
+		const auto t = burstDelays (d, fs, 2.0, static_cast<int> (fs / 10), 60);
+		double lo = 1e9, hi = -1e9, mean = 0;
+		for (double v : t) { lo = std::min (lo, v); hi = std::max (hi, v); mean += v; }
+		mean /= t.size ();
+		if (fs == 48000.0) still48 = mean;
+		std::printf ("  %.0f Hz still: reported %d, measured %.1f (%.1f .. %.1f)\n", fs, d.latencySamples (), mean, lo, hi);
+		CHECK (std::fabs (mean - d.latencySamples ()) < 0.00005 * fs && hi - lo < 0.5,
+		       "%.0f Hz: with nothing moving the head, measured = reported (%.1f vs %d)", fs, mean, d.latencySamples ());
+	}
+
+	// MOVING: the defaults (Wow 15 %, Flutter 10 %). Each burst lands up
+	// to ~50 samples either side - that is what wow is - but over whole
+	// cycles of the motor's drift (3 x 1/0.13 Hz) they average out to the
+	// latency the plug-in reports, so the host lines the track up right.
+	{
+		const double fs = 48000;
+		Dsp d;
+		d.setSampleRate (fs);
+		d.setDustPct (0); d.setScratchesPct (0);   // Wow and Flutter stay at their defaults
+		d.snapParameters ();
+		const double seconds = 3.0 / 0.13 + 0.1;
+		const auto t = burstDelays (d, fs, seconds, 2400, 120);
+		double lo = 1e9, hi = -1e9, mean = 0;
+		for (double v : t) { lo = std::min (lo, v); hi = std::max (hi, v); mean += v; }
+		mean /= t.size ();
+		std::printf ("  48 kHz, default wow + flutter: %zu bursts %.1f .. %.1f, mean %.1f (still %.1f, reported %d)\n",
+		             t.size (), lo, hi, mean, still48, d.latencySamples ());
+		CHECK (hi - lo > 40.0, "the wow really moves the head (%.1f samples), so the next check is not vacuous", hi - lo);
+		CHECK (std::fabs (mean - still48) < 1.5, "on average the moving head sits where the still one does (%.1f vs %.1f)",
+		       mean, still48);
+		CHECK (std::fabs (mean - d.latencySamples ()) < 0.00005 * fs, "so the reported latency is right on average (%.1f vs %d)",
+		       mean, d.latencySamples ());
+		CHECK (std::fabs (mean - (d.latencySamples () + 5)) >= 0.00005 * fs,
+		       "negative control: a latency misreported by 5 samples fails this check");
+	}
+}
+
+//------------------------------------------------------------------------
 static void testLevels ()
 {
 	std::printf ("levels: -12 dBFS sine at 1 kHz through each era (clean patch)\n");
@@ -876,6 +976,7 @@ int main ()
 {
 	testSharedRules ();
 	testLatencyAndDry ();
+	testMeasuredLatency ();
 	testLevels ();
 	testWorstCase ();
 	testPitch ();

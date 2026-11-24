@@ -240,7 +240,7 @@ needle is stuck. Era label colours are generic period colours, no company's.
 ## 8. Verification (VM, 10 Nov 2026)
 
 ```sh
-tools/run-tests.sh                       # DSP 151, Layout 1104, Params 156 — 0 failed (24 Nov 2026)
+tools/run-tests.sh                       # DSP 158, Layout 1104, Params 156 — 0 failed (24 Nov 2026)
 SDK=external/vst3sdk   # (in the VM: a clean 3.8.1_build_84 clone)
 for f in source/*.cpp; do
   g++ -c -std=c++17 -DLINUX=1 -DRELEASE=1 -I$SDK -I$SDK/vstgui4 -Isource -o /tmp/$(basename $f .cpp).o $f
@@ -258,6 +258,19 @@ material comes out near unity). Surface alone at default dust: −42 dBFS RMS
 4.03 %. Worst case (everything 100 %, full-scale noise, +12 dB): finite, read
 head never closer than 129 samples. Cost: 1.4 % of one VM core at 48 k with
 everything at 100 %.
+
+**Latency, as a host measures it (24 Nov 2026).** A host's test reported
+"576 smp, measured 627". Not a bug: Wow and Flutter MOVE the read head, so
+at the defaults a burst comes out anywhere in 526 – 628 samples (most of it
+the motor's 0.13 Hz drift, which a short test sees as a constant offset).
+`testMeasuredLatency` measures it the host's way (noise bursts,
+cross-correlation): with nothing moving, measured = reported at 44.1 / 48 /
+96 k (within 0.05 ms - the era low-pass's own ~0.03 ms group delay, which
+no plug-in reports); with the default wow and flutter, the mean over three
+drift cycles = the still value, so the reported latency is right on
+average. Checked by breaking it on purpose: a latency misreported by 5
+samples, and a wow with a DC offset, both fail. To check a host's figure,
+set Wow, Flutter and Warp to 0: it should read 576 – 578 at 48 k.
 
 **Xcode 27 (24 Nov 2026).** After the macOS / Xcode 27.2 upgrade the configure
 failed with "No CMAKE_C_COMPILER could be found": the deployment target was
