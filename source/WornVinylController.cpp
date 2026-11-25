@@ -8,6 +8,9 @@
 
 #include "base/source/fstreamer.h"
 #include "pluginterfaces/base/ustring.h"
+#include "pluginterfaces/vst/ivsthostapplication.h"
+#include "pluginterfaces/vst/ivstmessage.h"
+#include "public.sdk/source/vst/utility/stringconvert.h"
 #include "public.sdk/source/vst/vstparameters.h"
 
 #include <algorithm>
@@ -23,6 +26,15 @@ tresult PLUGIN_API WornVinylController::initialize (FUnknown* context)
 	const tresult result = EditControllerEx1::initialize (context);
 	if (result != kResultOk)
 		return result;
+
+	// What the host calls itself, for the About box. Under the Audio Unit
+	// wrapper this is the wrapper's own name - see AboutInfo.h.
+	if (FUnknownPtr<IHostApplication> host (context); host)
+	{
+		String128 name = {};
+		if (host->getName (name) == kResultOk)
+			mHostName = StringConvert::convert (name);
+	}
 
 	addParameters ();
 	return kResultOk;
@@ -164,6 +176,31 @@ tresult PLUGIN_API WornVinylController::setParamNormalized (ParamID tag, ParamVa
 	if (tag == kSkipping && value >= 0.5)
 		mSkipLatch = true;
 	return EditControllerEx1::setParamNormalized (tag, value);
+}
+
+//------------------------------------------------------------------------
+tresult PLUGIN_API WornVinylController::notify (IMessage* message)
+{
+	if (message && FIDStringsEqual (message->getMessageID (), kAudioSettingsMessage))
+	{
+		IAttributeList* attrs = message->getAttributes ();
+		double sampleRate = 0.0;
+		if (attrs && attrs->getFloat (kSampleRateAttribute, sampleRate) == kResultOk && sampleRate > 1000.0)
+		{
+			About::AudioSettings a;
+			a.known      = true;
+			a.sampleRate = sampleRate;
+			int64 v = 0;
+			if (attrs->getInt (kMaxBlockAttribute, v) == kResultOk)    a.maxBlock = static_cast<int> (v);
+			if (attrs->getInt (kSampleBitsAttribute, v) == kResultOk)  a.sampleBits = static_cast<int> (v);
+			if (attrs->getInt (kProcessModeAttribute, v) == kResultOk) a.processMode = static_cast<int> (v);
+			if (attrs->getInt (kChannelsAttribute, v) == kResultOk)    a.channels = static_cast<int> (v);
+			mAudio = a;
+			++mAudioGeneration;
+		}
+		return kResultOk;
+	}
+	return EditControllerEx1::notify (message);
 }
 
 //------------------------------------------------------------------------

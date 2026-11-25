@@ -12,12 +12,17 @@
 // The values are the parameter table's DEFAULTS and the disc at angle 0,
 // so docs/panel.png is the panel as it opens on a fresh instance.
 //
+// "about" is the About box, its rows from AboutInfo.h for a typical
+// install (render-panel.py --about draws it; docs/panel.png leaves it shut).
+//
 //   c++ -std=c++17 -I<sdk> -Isource tools/dump-layout.cpp
 //       source/WornVinylParams.cpp source/WornVinylDsp.cpp -o /tmp/dump-layout
 //------------------------------------------------------------------------
 
+#include "AboutInfo.h"
 #include "WornVinylLayout.h"
 #include "WornVinylParams.h"
+#include "version.h"
 
 #include <cstdio>
 #include <string>
@@ -218,6 +223,35 @@ int main ()
 	std::printf ("    \"rpm\": %s, \"channels\": %s, \"discName\": %s, \"stuck\": false}\n",
 	             quoted (rpmText (era, disc, speed)).c_str (), quoted (isStereo (era) ? "STEREO" : "MONO").c_str (),
 	             quoted (upperCase (discName (effectiveDisc (era, disc)))).c_str ());
+
+	// ---- the About box, as AboutBox::draw lays it out ------------------------------
+	{
+		About::Info info;
+		info.version = FULL_VERSION_STR;
+		info.commit = "24f0b18"; info.branch = "main";
+		info.audio = { true, 48000.0, 512, 32, 0, 2 };
+		info.hostName = "Cubase 14";
+		info.processName = "Cubase 14";
+		info.binaryPath = "/Library/Audio/Plug-Ins/VST3/WornVinyl.vst3/Contents/MacOS/WornVinyl";
+		const auto rs = About::rows (info);
+		std::string rowList = "[";
+		for (size_t i = 0; i < rs.size (); ++i)
+		{
+			std::string ls = "[";
+			for (size_t l = 0; l < rs[i].lines.size (); ++l)
+				ls += std::string (l ? "," : "") + quoted (rs[i].lines[l]);
+			rowList += std::string (i ? "," : "") + "{\"label\": " + quoted (rs[i].label) + ", \"y\": " +
+			           num (About::rowCentreY (rs, i)) + ", \"lines\": " + ls + "]}";
+		}
+		std::printf ("  ,\"about\": {\"box\": %s, \"wordmark\": %s, \"labelX\": %s, \"valueX\": %s, \"lineGap\": %s,\n",
+		             rect (kAboutBox).c_str (), rect (kWordmark).c_str (), num (kAboutLabelX).c_str (),
+		             num (kAboutValueX).c_str (), num (kAboutLineGap).c_str ());
+		std::printf ("    \"wordmarkY\": %s, \"taglineY\": %s, \"footerY\": %s, \"tagline\": %s, \"footer\": %s,\n",
+		             num (kAboutWordmarkY).c_str (), num (kAboutTaglineY).c_str (), num (kAboutFooterY).c_str (),
+		             quoted (kAboutTagline).c_str (), quoted (kAboutFooter).c_str ());
+		std::printf ("    \"labelStyle\": %s, \"valueStyle\": %s,\n    \"rows\": %s]}\n",
+		             style (kTextAboutLabel).c_str (), style (kTextAboutValue).c_str (), rowList.c_str ());
+	}
 	std::printf ("}\n");
 	return 0;
 }

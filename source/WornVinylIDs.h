@@ -23,8 +23,8 @@ static const Steinberg::FUID kWornVinylControllerUID (0x9BCDC74F, 0x5BB78CE2, 0x
 //------------------------------------------------------------------------
 // Processor <-> controller messages
 //
-// NONE - and this block is here so the first person to add one reads it
-// first.
+// ONE: the audio settings, for the About box (added 25 Nov 2026, as
+// SpaceDub's). Sent from setActive, when the host has just set them.
 //
 // Every message travels on the UI THREAD. sendMessage from process()
 // returns success and is then silently discarded by the host's connection
@@ -34,6 +34,16 @@ static const Steinberg::FUID kWornVinylControllerUID (0x9BCDC74F, 0x5BB78CE2, 0x
 // WornVinylParams.h). Messages are fine from setActive, setState and
 // notify.
 //------------------------------------------------------------------------
+
+
+/** Processor -> controller, from setActive (UI thread): how the host is
+    running us. The controller keeps them for the About box. */
+static const char* const kAudioSettingsMessage      = "WornVinylAudioSettings";
+static const char* const kSampleRateAttribute       = "sampleRate";
+static const char* const kMaxBlockAttribute         = "maxBlock";
+static const char* const kSampleBitsAttribute       = "sampleBits";
+static const char* const kProcessModeAttribute      = "processMode";
+static const char* const kChannelsAttribute         = "channels";
 
 //------------------------------------------------------------------------
 } // namespace WornVinyl

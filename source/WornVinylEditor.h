@@ -23,6 +23,11 @@
 //     turns to the published angle, the lamp takes the latched SKIP.
 //   * Polling rather than being pushed keeps the controller free of an
 //     editor list, so the editorDestroyed trap cannot arise.
+//
+// THE ABOUT BOX (SpaceDub's, 25 Nov 2026): click WORN VINYL and a box opens
+// over the dimmed panel - version, the git commit it was built from, VST3
+// or AU, the host, the audio settings, where it was loaded from. Any click
+// or Escape closes it. What it says is AboutInfo.h.
 //------------------------------------------------------------------------
 
 #pragma once
@@ -56,10 +61,18 @@ public:
 	/** A control moved: tell the controller and the host. */
 	void valueChanged (VSTGUI::CControl* control) override;
 
+	/** The About box: opened by clicking the wordmark, closed by any click
+	    or Escape. refreshAbout () rebuilds its rows (AboutInfo.h). */
+	void openAbout ();
+	void closeAbout ();
+	bool isAboutOpen () const;
+	About::Info aboutInfo () const;
+
 private:
 	void build ();
 	void refresh ();
 	WornVinylController* vinylController () const;
+	void refreshAbout ();
 
 	/** Every control and the parameter behind it. */
 	std::vector<VSTGUI::CControl*> mControls;   // owned by the frame
@@ -75,6 +88,20 @@ private:
 	/** The lamp stays lit this many more ticks after a skip, so a 6 ms
 	    jump is still seen. */
 	int mLampHold = 0;
+
+	Panel::LogoButton* mLogo = nullptr;
+	Panel::AboutBox* mAbout = nullptr;
+	/** The controller's audioGeneration () when the box's rows were built. */
+	int mAboutGeneration = -1;
+
+	/** Escape closes the About box. A hook on the frame, because the box
+	    never has keyboard focus. */
+	struct EscapeHook : VSTGUI::IKeyboardHook
+	{
+		WornVinylEditor* editor = nullptr;
+		void onKeyboardEvent (VSTGUI::KeyboardEvent& event, VSTGUI::CFrame* frame) override;
+	};
+	EscapeHook mEscapeHook;
 
 	VSTGUI::SharedPointer<VSTGUI::CVSTGUITimer> mTimer;
 };

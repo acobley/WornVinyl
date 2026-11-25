@@ -5,10 +5,30 @@
 #include "WornVinylEditor.h"
 #include "WornVinylController.h"
 #include "WornVinylParams.h"
+#include "version.h"
+
+// The commit this was built from - generated on every build by
+// cmake-git-version.cmake. Absent (a build outside CMake), the About box
+// says "not built from git".
+#if __has_include("WornVinylGitVersion.h")
+#include "WornVinylGitVersion.h"
+#endif
+#ifndef WORNVINYL_GIT_COMMIT
+#define WORNVINYL_GIT_COMMIT ""
+#define WORNVINYL_GIT_BRANCH ""
+#define WORNVINYL_GIT_DIRTY  0
+#endif
 
 #include "vstgui/vstgui.h"
 
 #include <cmath>
+
+#if SMTG_OS_WINDOWS
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#include <stdlib.h>
+#endif
 
 using namespace Steinberg;
 using namespace VSTGUI;
@@ -17,7 +37,59 @@ namespace WornVinyl {
 
 namespace {
 CRect toCRect (const Layout::Rect& r) { return CRect (r.left, r.top, r.right, r.bottom); }
+
+#if SMTG_OS_WINDOWS
+std::string narrow (const wchar_t* w)
+{
+	const int n = WideCharToMultiByte (CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
+	if (n <= 1)
+		return {};
+	std::string s (static_cast<size_t> (n - 1), '\0');
+	WideCharToMultiByte (CP_UTF8, 0, w, -1, s.data (), n, nullptr, nullptr);
+	return s;
 }
+#endif
+
+/** The file our own code was loaded from: ask the loader which binary holds
+    this very function. (The AU wrapper's .component holds the VST3 inside
+    it - AboutInfo.h's bundlePath () sorts out which bundle to name.) */
+std::string moduleBinaryPath ()
+{
+#if SMTG_OS_WINDOWS
+	HMODULE module = nullptr;
+	if (! GetModuleHandleExW (GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+	                          reinterpret_cast<LPCWSTR> (&moduleBinaryPath), &module))
+		return {};
+	wchar_t buf[4096] = {};
+	return GetModuleFileNameW (module, buf, 4096) ? narrow (buf) : std::string ();
+#else
+	Dl_info info = {};
+	if (dladdr (reinterpret_cast<const void*> (&moduleBinaryPath), &info) && info.dli_fname)
+		return info.dli_fname;
+	return {};
+#endif
+}
+
+/** The application we are running in. */
+std::string processName ()
+{
+#if SMTG_OS_WINDOWS
+	wchar_t buf[4096] = {};
+	if (! GetModuleFileNameW (nullptr, buf, 4096))
+		return {};
+	std::string s = narrow (buf);
+	const auto slash = s.find_last_of ("\\/");
+	s = (slash == std::string::npos) ? s : s.substr (slash + 1);
+	const auto dot = s.rfind ('.');
+	return dot == std::string::npos ? s : s.substr (0, dot);
+#elif SMTG_OS_MACOS
+	const char* name = getprogname ();
+	return name ? name : "";
+#else
+	return {};
+#endif
+}
+} // anonymous namespace
 
 //------------------------------------------------------------------------
 WornVinylEditor::WornVinylEditor (Vst::EditController* controller)
@@ -45,6 +117,9 @@ bool PLUGIN_API WornVinylEditor::open (void* parent, const PlatformType& platfor
 
 	if (! frame->open (parent, platformType))
 	{
+		frame->unregisterKeyboardHook (&mEscapeHook);
+		mLogo = nullptr;
+		mAbout = nullptr;
 		frame->forget ();
 		frame = nullptr;
 		mControls.clear ();
@@ -52,6 +127,7 @@ bool PLUGIN_API WornVinylEditor::open (void* parent, const PlatformType& platfor
 	}
 
 	mLampHold = 0;
+	mAboutGeneration = -1;
 	refresh ();
 	mTimer = makeOwned<CVSTGUITimer> ([this] (CVSTGUITimer*) { refresh (); }, kTimerMs);
 	return true;
@@ -67,9 +143,12 @@ void PLUGIN_API WornVinylEditor::close ()
 	mTurntable = nullptr;
 	mSkipLamp = nullptr;
 	mHeaderLine = mDiscNote = mTurntableLine = mSpeedLine = nullptr;
+	mLogo = nullptr;
+	mAbout = nullptr;
 
 	if (frame)
 	{
+		frame->unregisterKeyboardHook (&mEscapeHook);
 		frame->forget ();
 		frame = nullptr;
 	}
@@ -133,6 +212,17 @@ void WornVinylEditor::build ()
 	frame->addView (mDiscNote);
 	frame->addView (mTurntableLine);
 	frame->addView (mSpeedLine);
+
+	// ---- the wordmark opens the About box ---------------------------------
+	mLogo = new LogoButton (toCRect (Layout::kWordmark), [this] () { openAbout (); });
+	frame->addView (mLogo);
+
+	// ---- the About box: last, so it is on top of everything; hidden --------
+	mAbout = new AboutBox (CRect (0, 0, kEditorWidth, kEditorHeight), [this] () { closeAbout (); });
+	mAbout->setVisible (false);
+	frame->addView (mAbout);
+	mEscapeHook.editor = this;
+	frame->registerKeyboardHook (&mEscapeHook);
 }
 
 //------------------------------------------------------------------------
@@ -199,6 +289,74 @@ void WornVinylEditor::refresh ()
 		--mLampHold;
 	mSkipLamp->setOn (mLampHold > 0);
 	mTurntable->setSkipping (mLampHold > 0);
+
+	// The About box, if it is up and the processor has been re-activated
+	// (a new sample rate, block size, a bounce) since its rows were built.
+	if (isAboutOpen () && controller->audioGeneration () != mAboutGeneration)
+		refreshAbout ();
+}
+
+//------------------------------------------------------------------------
+// The About box
+//------------------------------------------------------------------------
+About::Info WornVinylEditor::aboutInfo () const
+{
+	About::Info info;
+	info.version     = FULL_VERSION_STR;
+	info.commit      = WORNVINYL_GIT_COMMIT;
+	info.branch      = WORNVINYL_GIT_BRANCH;
+	info.dirty       = WORNVINYL_GIT_DIRTY != 0;
+	info.binaryPath  = moduleBinaryPath ();
+	info.processName = processName ();
+	if (auto* controller = vinylController ())
+	{
+		info.audio    = controller->getAudioSettings ();
+		info.hostName = controller->getHostName ();
+	}
+	return info;
+}
+
+bool WornVinylEditor::isAboutOpen () const
+{
+	return mAbout != nullptr && mAbout->isVisible ();
+}
+
+void WornVinylEditor::refreshAbout ()
+{
+	if (! mAbout)
+		return;
+	if (auto* controller = vinylController ())
+		mAboutGeneration = controller->audioGeneration ();
+	mAbout->setRows (About::rows (aboutInfo ()));
+}
+
+void WornVinylEditor::openAbout ()
+{
+	if (! mAbout || isAboutOpen ())
+		return;
+	refreshAbout ();
+	mAbout->setVisible (true);
+	mAbout->invalid ();
+}
+
+void WornVinylEditor::closeAbout ()
+{
+	// Called from the box's own mouse handler: hide it, never remove it.
+	if (! isAboutOpen ())
+		return;
+	mAbout->setVisible (false);
+	if (frame)
+		frame->invalid ();
+}
+
+void WornVinylEditor::EscapeHook::onKeyboardEvent (KeyboardEvent& event, CFrame*)
+{
+	if (editor && editor->isAboutOpen () && event.type == EventType::KeyDown &&
+	    event.virt == VirtualKey::Escape)
+	{
+		editor->closeAbout ();
+		event.consumed = true;
+	}
 }
 
 //------------------------------------------------------------------------

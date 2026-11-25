@@ -7,6 +7,7 @@
 #include "DenormalGuard.h"
 
 #include "base/source/fstreamer.h"
+#include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 
@@ -68,8 +69,32 @@ tresult PLUGIN_API WornVinylProcessor::setActive (TBool state)
 		pushParameters ();
 		mDsp.snapParameters ();
 		mDsp.reset ();
+		sendAudioSettings ();
 	}
 	return AudioEffect::setActive (state);
+}
+
+//------------------------------------------------------------------------
+void WornVinylProcessor::sendAudioSettings ()
+{
+	// setActive is [UI-thread] in VST3, and comes after setupProcessing and
+	// setBusArrangements, so all of this is current - and a message may
+	// legitimately go out (see WornVinylIDs.h).
+	if (! getPeer ())
+		return;
+	if (IPtr<IMessage> message = owned (allocateMessage ()))
+	{
+		message->setMessageID (kAudioSettingsMessage);
+		auto* attrs = message->getAttributes ();
+		SpeakerArrangement arrangement = SpeakerArr::kStereo;
+		getBusArrangement (kOutput, 0, arrangement);
+		attrs->setFloat (kSampleRateAttribute, processSetup.sampleRate);
+		attrs->setInt (kMaxBlockAttribute, processSetup.maxSamplesPerBlock);
+		attrs->setInt (kSampleBitsAttribute, processSetup.symbolicSampleSize == kSample64 ? 64 : 32);
+		attrs->setInt (kProcessModeAttribute, processSetup.processMode);
+		attrs->setInt (kChannelsAttribute, SpeakerArr::getChannelCount (arrangement));
+		sendMessage (message);
+	}
 }
 
 //------------------------------------------------------------------------

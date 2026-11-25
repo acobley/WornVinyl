@@ -17,9 +17,12 @@
 
 #pragma once
 
+#include "AboutInfo.h"
 #include "WornVinylParams.h"
 
 #include "public.sdk/source/vst/vsteditcontroller.h"
+
+#include <string>
 
 namespace WornVinyl {
 
@@ -54,10 +57,23 @@ public:
 	    UI thread only. */
 	bool takeSkipped ();
 
+	/** The audio settings, from the processor (WornVinylIDs.h). */
+	Steinberg::tresult PLUGIN_API notify (Steinberg::Vst::IMessage* message) SMTG_OVERRIDE;
+
+	/** For the About box: how the processor is being run, and what the
+	    host calls itself. The editor polls, so audioGeneration () counts
+	    the messages - a change means the box's rows are out of date. */
+	const About::AudioSettings& getAudioSettings () const { return mAudio; }
+	const std::string& getHostName () const { return mHostName; }
+	int audioGeneration () const { return mAudioGeneration; }
+
 private:
 	void addParameters ();
 
 	bool mSkipLatch = false;
+	About::AudioSettings mAudio;
+	std::string mHostName;
+	int mAudioGeneration = 0;
 };
 
 //------------------------------------------------------------------------

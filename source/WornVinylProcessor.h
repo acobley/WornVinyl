@@ -52,6 +52,10 @@ private:
 	    DSP, so nothing here needs to be sample-accurate. */
 	void applyParameterChanges (Steinberg::Vst::IParameterChanges* changes);
 
+	/** The audio settings, to the controller for the About box. From
+	    setActive (UI thread) only - never from process(). */
+	void sendAudioSettings ();
+
 	/** Push mParams into the DSP, in PLAIN units. */
 	void pushParameters ();
 

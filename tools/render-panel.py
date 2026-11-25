@@ -18,6 +18,7 @@ layout without a host. The panel is drawn at its defaults, the disc at
 angle 0, as a fresh instance opens.
 
     python3 tools/render-panel.py [out.png]
+    python3 tools/render-panel.py --about [out.png]   # with the About box open
 
 Needs a C++ compiler, Pillow, and the VST3 SDK for one header-only file:
 external/vst3sdk (the in-tree clone), or VST3_SDK_ROOT in the environment.
@@ -438,9 +439,47 @@ def lines(d):
 
 
 # ---------------------------------------------------------------------------
+# AboutBox::draw - the panel dimmed, the box, the wordmark, the rows
+# ---------------------------------------------------------------------------
+def about_box(img):
+    A, S = L['about'], L['styles']
+    o, d = layer(img)
+    d.rectangle([0, 0, p(L['width']), p(L['height'])], fill=(0, 0, 0, 178))
+    img.alpha_composite(o)
+    d = ImageDraw.Draw(img)
+
+    b = A['box']
+    round_rect(d, b, L['sectionRadius'], fill=SECTION, outline=SECTION_EDGE, width=1.2)
+    band = [b[0] + 1.2, b[1] + 1.2, b[2] - 1.2, b[1] + 62.0]
+    d.rectangle([p(band[0]), p(band[1]), p(band[2]), p(band[3])], fill=HEADER)
+    d.rectangle([p(band[0]), p(band[3]), p(band[2]), p(band[3] + 2)], fill=HEADER_RULE)
+
+    cx = (b[0] + b[2]) / 2
+    gap = L['wordmarkGap']
+    w = text_width('WORN', S['wordmark']) + gap + text_width('VINYL', S['wordmark'])
+    left = cx - w / 2
+    second = left + text_width('WORN', S['wordmark']) + gap
+    for ink, units in ((INK, None), (HEADER, 0.32)):
+        lettering(d, 'WORN', S['wordmark'], ink, left, A['wordmarkY'], stroke_units=units)
+        lettering(d, 'VINYL', S['wordmark'], ink, second, A['wordmarkY'], stroke_units=units)
+    lettering(d, A['tagline'], A['valueStyle'], INK_SOFT, cx, A['taglineY'], 'centre')
+
+    for row in A['rows']:
+        lettering(d, row['label'], A['labelStyle'], INK_DIM, A['labelX'], row['y'])
+        for i, line in enumerate(row['lines']):
+            lettering(d, line, A['valueStyle'], INK, A['valueX'], row['y'] + A['lineGap'] * i)
+
+    fy = A['footerY']
+    d.rectangle([p(b[0] + 24), p(fy - 16), p(b[2] - 24), p(fy - 15)], fill=RULE)
+    lettering(d, A['footer'], S['note'], INK_DIM, cx, fy, 'centre')
+
+
+# ---------------------------------------------------------------------------
 def main():
     global L
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'docs', 'panel.png')
+    args = [a for a in sys.argv[1:] if a != '--about']
+    show_about = len(args) != len(sys.argv) - 1
+    out = args[0] if args else os.path.join(ROOT, 'docs', 'panel.png')
     L = dump_layout()
     img = Image.new('RGBA', (p(L['width']), p(L['height'])), GROUND + (255,))
     backdrop(ImageDraw.Draw(img))
@@ -452,6 +491,8 @@ def main():
     d = ImageDraw.Draw(img)
     lamp(d)
     lines(d)
+    if show_about:
+        about_box(img)
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     img = img.convert('RGB').resize((L['width'] * SCALE, L['height'] * SCALE), Image.LANCZOS)
     img.save(out)

@@ -93,6 +93,10 @@ constexpr double kWordmarkGap    = 12.0;     // between WORN and VINYL
 constexpr int    kHeaderDivider  = 300;
 constexpr Rect   kHeaderLine     { 314, 20, 984, 36 };
 
+/** WORN VINYL, as a click target: it opens the About box. Generous round
+    the lettering (LayoutTests checks the lettering is inside it). */
+constexpr Rect   kWordmark       { 14, 6, 292, kHeaderHeight - 6 };
+
 constexpr struct { int x, y; } kScrews[] = { { 8, 8 }, { 992, 8 }, { 8, 512 }, { 992, 512 } };
 
 //------------------------------------------------------------------------
@@ -456,6 +460,33 @@ inline std::string speedLineText (int era, int disc, int speed)
 	               turntableRpm (era, disc, speed) / 60.0);
 	return b;
 }
+
+//------------------------------------------------------------------------
+// The About box - clicking the wordmark opens it over the whole panel; a
+// click anywhere, or Escape, closes it. See AboutInfo.h for what is in it.
+// SpaceDub's, re-centred for this smaller panel; one row shorter (no
+// tempo).
+//------------------------------------------------------------------------
+constexpr Rect   kAboutBox       { 190, 60, 810, 460 };   // centred: 620 x 400
+constexpr double kAboutLabelX    = kAboutBox.left + 32;
+constexpr double kAboutValueX    = kAboutBox.left + 182;
+constexpr double kAboutValueW    = kAboutBox.right - 32 - kAboutValueX;
+constexpr double kAboutWordmarkY = kAboutBox.top + 32;    // the wordmark's centre, in the box's header band
+constexpr double kAboutTaglineY  = kAboutBox.top + 78;
+constexpr double kAboutFirstRowY = kAboutBox.top + 118;   // the first row's centre
+constexpr double kAboutRowGap    = 26;                    // row to row
+constexpr double kAboutLineGap   = 17;                    // a wrapped value's lines
+constexpr double kAboutFooterY   = kAboutBox.bottom - 24;
+constexpr int    kAboutPathLines = 3;                     // most lines a path may take
+constexpr Lettering::Style kTextAboutLabel { 6.1, Lettering::kBold };
+constexpr Lettering::Style kTextAboutValue { 6.7, Lettering::kRegular };
+static_assert (kAboutBox.left >= 0 && kAboutBox.right <= kEditorWidth && kAboutBox.bottom <= kEditorHeight,
+               "the About box is on the panel");
+static_assert (kAboutBox.left + kAboutBox.right == kEditorWidth && kAboutBox.top + kAboutBox.bottom == kEditorHeight,
+               "the About box is centred");
+
+constexpr const char* kAboutTagline = "YOUR TRACK PLAYED BACK OFF A WORN RECORD";
+constexpr const char* kAboutFooter  = "CLICK ANYWHERE OR PRESS ESC TO CLOSE";
 
 //------------------------------------------------------------------------
 } // namespace Layout

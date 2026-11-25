@@ -396,6 +396,25 @@ add_custom_command(TARGET ${PLUGIN_NAME} PRE_BUILD
 target_compile_features(${PLUGIN_NAME} PUBLIC cxx_std_17)
 target_include_directories(${PLUGIN_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/source")
 
+# The About box names the git commit it was built from. A custom target runs
+# cmake-git-version.cmake on every build (so a new commit shows up without
+# re-configuring); it rewrites the header only when it changes. It is also
+# run once here, so the header exists before the first build. (SpaceDub's.)
+find_package(Git QUIET)
+set(WORNVINYL_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(WORNVINYL_GIT_HEADER "${WORNVINYL_GENERATED_DIR}/WornVinylGitVersion.h")
+set(_wornvinyl_git_cmd "${CMAKE_COMMAND}" "-DSRC=${CMAKE_CURRENT_SOURCE_DIR}" "-DOUT=${WORNVINYL_GIT_HEADER}"
+    "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}" -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake-git-version.cmake")
+file(MAKE_DIRECTORY "${WORNVINYL_GENERATED_DIR}")
+execute_process(COMMAND ${_wornvinyl_git_cmd})
+add_custom_target(WornVinylGitVersion
+    COMMAND ${_wornvinyl_git_cmd}
+    BYPRODUCTS "${WORNVINYL_GIT_HEADER}"
+    COMMENT "WornVinyl: stamping the git commit for the About box"
+    VERBATIM)
+add_dependencies(${PLUGIN_NAME} WornVinylGitVersion)
+target_include_directories(${PLUGIN_NAME} PRIVATE "${WORNVINYL_GENERATED_DIR}")
+
 target_link_libraries(${PLUGIN_NAME}
     PRIVATE
         sdk
