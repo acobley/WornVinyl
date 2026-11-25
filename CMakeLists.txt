@@ -68,7 +68,7 @@ endif()
 # loses it.
 #-----------------------------------------------------------------------------
 set(PLUGIN_NAME         "WornVinyl")
-set(PLUGIN_VERSION      "1.0.0.0")
+set(PLUGIN_VERSION      "1.1.0.0")
 set(PLUGIN_DESCRIPTION  "Worn Vinyl - shellac and vinyl record emulation")
 set(PLUGIN_COMPANY      "AE Cobley")   # no full stops; the same as the AU name's maker - see au-info.plist
 set(PLUGIN_BUNDLE_ID    "audio.WornVinyl.vst3")

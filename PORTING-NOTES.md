@@ -39,7 +39,7 @@ Linux VM. See *Verification* for what to run first.
 | AU type / subtype / manufacturer | `aufx` / `WVnl` / `AECo` |
 | Processor UID | `0x60BD0A8C, 0x000572B3, 0x73B3540F, 0xD31204EF` |
 | Controller UID | `0x9BCDC74F, 0x5BB78CE2, 0x8D7E04B4, 0x39A6E4D6` |
-| Version | 1.0.0.0 |
+| Version | 1.1.0.0 |
 
 UIDs generated fresh with the skill's `os.urandom` one-liner on 10 Nov 2026.
 **Never reuse or change them.**
