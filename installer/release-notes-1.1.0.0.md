@@ -90,7 +90,7 @@ sudo rm -rf /Library/Audio/Plug-Ins/Components/WornVinyl.component
 ## Checksum
 
 ```
-SHA-256: <paste from: shasum -a 256 installer/WornVinyl-1.1.0.0.pkg>
+SHA-256: d3b3f1f33d52d268b07bfd230b85b6ecab984e5914e996064fbb8ddeaf721005
 ```
 
 ---
