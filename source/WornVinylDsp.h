@@ -496,12 +496,33 @@ public:
 	double speakerMakeupDb () const { return mSpeakerMakeupDb; }
 	int jumpsTaken () const { return mJumpCount; }
 	int activeSpeaker () const { return mActiveSpeaker; }
+	/** How many values of recursive state (every filter, oversampler,
+	    echo and smoother) are denormal right now. Zero is the target. */
+	int denormalStateCount () const;
 
 private:
 	struct Smooth
 	{
 		double value = 0.0, target = 0.0;
-		double next (double k) { value += (target - value) * k; return value; }
+
+		/** ONE-POLE SMOOTHING NEVER ARRIVES ON ITS OWN. Aimed at zero, the
+		    step (target - value) * k drops below the smallest normal double
+		    while value is still ~2e-305: flush-to-zero turns the step into
+		    0 and value stops there (without FTZ it creeps on into the
+		    denormals and stops at ~1e-321). Either way `dust > 0.0`,
+		    `warp > 0.0` and the surface's fade stayed TRUE for good: the
+		    noise filters ran on, and the crackle draw went on eating
+		    random numbers - so a passage played after Dust was turned
+		    down to 0 jumped in different places from the same passage
+		    after a reload (which snaps to exactly 0). Measured: 8 jumps
+		    against 6. Within 1e-9 of the target it IS the target. */
+		double next (double k)
+		{
+			value += (target - value) * k;
+			if (std::fabs (target - value) < 1e-9)
+				value = target;
+			return value;
+		}
 		void snap () { value = target; }
 	};
 

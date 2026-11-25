@@ -9,6 +9,7 @@
 //------------------------------------------------------------------------
 
 #include "WornVinylDsp.h"
+#include "DenormalGuard.h"
 
 #include <chrono>
 #include <cmath>
@@ -1040,6 +1041,115 @@ static void testSmoothingAndEdges ()
 }
 
 //------------------------------------------------------------------------
+/** Music, then silence with the record stopped and Dust and Warp turned
+    down: every filter, oversampler, echo and smoother heads for zero.
+    Under the guard (as the processor runs it) none of it may be left
+    denormal; without the guard the same run must leave some - or this
+    test cannot tell a guard that works from one that does nothing. */
+static int denormalsAfterSilence (bool guard)
+{
+	const double fs = 48000;
+	Dsp d;
+	d.setSampleRate (fs);
+	clean (d);
+	d.setSpeaker (kSpeakerHorn);   // the most state: the oversampled cone, the horn's echo
+	d.setDustPct (30); d.setWarpPct (40);
+	d.snapParameters ();
+
+	const int block = 512;
+	std::vector<float> in (block), l (block), r (block);
+	uint32_t seed = 1;
+	auto go = [&] (bool loud, bool playing) {
+		for (auto& x : in)
+		{
+			seed = seed * 1664525u + 1013904223u;
+			x = loud ? static_cast<float> (static_cast<int32_t> (seed) >> 8) / 8388608.0f * 0.5f : 0.0f;
+		}
+		d.setTransport (true, playing, 0, block);
+		if (guard)
+		{
+			ScopedFlushDenormals noDenormals;
+			d.process (in.data (), in.data (), l.data (), r.data (), block);
+		}
+		else
+			d.process (in.data (), in.data (), l.data (), r.data (), block);
+	};
+	for (int b = 0; b < 94; ++b) go (true, true);          // 1 s of music
+	d.setDustPct (0); d.setWarpPct (0);
+	for (int b = 0; b < 94 * 30; ++b) go (false, false);   // 30 s stopped, silent
+	return d.denormalStateCount ();
+}
+
+static void testDenormals ()
+{
+	const int with = denormalsAfterSilence (true);
+	CHECK (with == 0, "with the guard: %d denormal state values after silence", with);
+
+	if (ScopedFlushDenormals::supported ())
+	{
+		const int without = denormalsAfterSilence (false);
+		CHECK (without > 0, "negative control: without the guard %d denormal (must be > 0)", without);
+	}
+	else
+		std::printf ("  (no flush-to-zero on this architecture: the guard does nothing here)\n");
+
+	// The host's mode comes back: outside the guard a denormal survives.
+	{ ScopedFlushDenormals noDenormals; }
+	volatile double tiny = 2.2250738585072014e-308;
+	const double half = tiny * 0.5;
+	CHECK (half != 0.0, "the guard restores the host's FPU mode on exit");
+}
+
+//------------------------------------------------------------------------
+/** A smoother aimed at 0 must GET there. Turning Dust down to 0 and then
+    playing a passage must be the same as playing it with Dust loaded at 0
+    - the crackle draw's random numbers included, so the needle jumps in
+    the same places. Silent music, so only the surface and the jumps'
+    thumps are heard. */
+static std::vector<float> passage (Dsp& d, double fs, double seconds, int64_t from)
+{
+	const int block = 512;
+	std::vector<float> in (block, 0.0f), l (block), r (block), out;
+	int64_t pos = from;
+	const auto n = static_cast<int64_t> (fs * seconds) / block;
+	for (int64_t b = 0; b < n; ++b, pos += block)
+	{
+		d.setTransport (true, true, pos, block);
+		d.process (in.data (), in.data (), l.data (), r.data (), block);
+		out.insert (out.end (), l.begin (), l.end ());
+	}
+	return out;
+}
+
+static void testSmoothersArrive ()
+{
+	const double fs = 48000;
+	auto make = [fs] (Dsp& d, double dust) {
+		d.setSampleRate (fs);
+		clean (d);
+		d.setScratchesPct (100);   // ticks and jumps: both drawn from the random numbers
+		d.setDustPct (dust);
+		d.snapParameters ();
+	};
+
+	Dsp swept; make (swept, 30);
+	swept.setDustPct (0);
+	passage (swept, fs, 30, static_cast<int64_t> (fs * 100));   // somewhere else, long enough to arrive
+	const auto a = passage (swept, fs, 20, 0);                    // then locate to the start
+
+	Dsp loaded; make (loaded, 0);
+	const auto b = passage (loaded, fs, 20, 0);
+
+	Dsp control; make (control, 0.001);   // a real, tiny Dust: the draws go on
+	const auto c = passage (control, fs, 20, 0);
+
+	const bool same = a.size () == b.size () && std::memcmp (a.data (), b.data (), a.size () * sizeof (float)) == 0;
+	const bool differs = c.size () != b.size () || std::memcmp (c.data (), b.data (), c.size () * sizeof (float)) != 0;
+	CHECK (same, "Dust turned down to 0 plays the passage as Dust loaded at 0, bit for bit");
+	CHECK (differs, "negative control: Dust at 0.001 %% must play it differently");
+}
+
+//------------------------------------------------------------------------
 static void testCost ()
 {
 	const double fs = 48000;
@@ -1072,6 +1182,8 @@ int main ()
 	testTransport ();
 	testMonoAndDeterminism ();
 	testSmoothingAndEdges ();
+	testDenormals ();
+	testSmoothersArrive ();
 	testCost ();
 	std::printf ("\nDSP: %d checks, %d failed\n", gChecks, gFails);
 	return gFails ? 1 : 0;

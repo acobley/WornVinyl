@@ -877,6 +877,38 @@ void Dsp::syncToSong (int64_t projectSample)
 	}
 }
 
+int Dsp::denormalStateCount () const
+{
+	int n = 0;
+	auto v = [&n] (double x) {
+		if (x != 0.0 && std::fabs (x) < 2.2250738585072014e-308)   // DBL_MIN
+			++n;
+	};
+	auto bq = [&v] (const Biquad& b) { v (b.z1); v (b.z2); };
+	auto hb = [&v] (const HalfBand& h) {
+		for (int i = 0; i < HalfBand::kMaxCoefs; ++i) { v (h.x[i]); v (h.y[i]); }
+	};
+	auto os = [&hb] (const Oversampler4x& o) { hb (o.up1); hb (o.up2); hb (o.down2); hb (o.down1); };
+	auto eq = [&bq] (const EraEq& e) { bq (e.hp); bq (e.lp1); bq (e.lp2); bq (e.pk1); bq (e.pk2); };
+	auto spk = [&] (const SpeakerChain& s) {
+		bq (s.hp1); bq (s.hp2); bq (s.lp1); bq (s.lp2);
+		for (const auto& b : s.pk) bq (b);
+		os (s.os);
+		v (s.coneLp); v (s.combLp);
+		for (double x : s.comb) v (x);
+	};
+
+	eq (mEqL); eq (mEqR); eq (mPlayL); eq (mPlayR);
+	os (mLatheOsL); os (mLatheOsR);
+	spk (mSpkL); spk (mSpkR);
+	bq (mHissShapeL); bq (mHissShapeR); bq (mHissShape2L); bq (mHissShape2R);
+	bq (mRumbleL); bq (mRumbleR);
+	v (mWarpLpL); v (mWarpLpR);
+	for (const Smooth* s : { &mScratches, &mDust, &mWow, &mFlutter, &mWarp, &mMix, &mOutput, &mBypass, &mSurface })
+		v (s->value);
+	return n;
+}
+
 double Dsp::takeMinReadDelay ()
 {
 	const double m = mMinDelay;
